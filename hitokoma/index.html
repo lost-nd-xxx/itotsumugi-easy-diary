@@ -71,9 +71,6 @@
   .chip .lbl{font-size:11px; color:var(--muted); max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
   .chip.sel{background:var(--accent-soft); border-color:var(--accent)}
   .chip.sel .lbl{color:var(--accent-ink)}
-  .chip .check{position:absolute; top:3px; right:4px; font-size:11px; color:var(--accent); opacity:0; transition:opacity .12s}
-  .chip{position:relative}
-  .chip.sel .check{opacity:1}
 
   /* ===== パレット ジャンルアコーディオン ===== */
   .genre-details{margin-bottom:6px; border:1px solid var(--line); border-radius:var(--radius-sm); background:var(--paper)}
@@ -196,9 +193,6 @@
   .sec{margin-top:20px; padding-top:18px; border-top:1px solid var(--line)}
   .sec h4{font-size:13px; color:var(--muted); font-weight:600; margin:0 0 11px; letter-spacing:.04em}
   .pick-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(56px,1fr)); gap:8px; margin-bottom:8px}
-  .pick{background:var(--surface); border:1px solid var(--line); border-radius:11px; padding:9px 2px; display:flex; flex-direction:column; gap:2px; align-items:center}
-  .pick.sel{border-color:var(--accent); background:var(--accent-soft)}
-  .pick .emo{font-size:22px} .pick .lbl{font-size:10px; color:var(--muted)}
 
   /* ===== カレンダー ===== */
   .cal-header{display:flex; align-items:center; justify-content:space-between; margin:18px 4px 10px}
@@ -231,12 +225,6 @@
     padding:7px 15px; font-size:13.5px; color:var(--muted); cursor:pointer}
   .filter-genre.sel{background:var(--accent-soft); border-color:var(--accent); color:var(--accent-ink); font-weight:600}
   .filter-icon-grid{display:grid; grid-template-columns:repeat(5,1fr); gap:6px; margin-bottom:8px}
-  .filter-icon{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-sm);
-    padding:8px 2px; display:flex; flex-direction:column; align-items:center; gap:2px; cursor:pointer}
-  .filter-icon.sel{background:var(--accent-soft); border-color:var(--accent)}
-  .filter-icon .emo{font-size:20px}
-  .filter-icon .lbl{font-size:10px; color:var(--muted); text-align:center}
-  .filter-icon.sel .lbl{color:var(--accent-ink)}
   .filter-sec{margin-bottom:4px; font-size:12px; color:var(--muted); font-weight:600; letter-spacing:.04em}
   /* 絞り込み中バッジ（フィード/カレンダー見出し） */
   .filter-badge{display:inline-flex; align-items:center; gap:5px; background:var(--accent-soft);
@@ -323,18 +311,22 @@
 <!-- 記録の編集シート -->
 <div class="scrim" id="editScrim">
   <div class="sheet" role="dialog" aria-modal="true" aria-label="記録を編集">
-    <h3>記録を編集</h3>
-    <div class="field">
-      <label>アイコン</label>
-      <div class="pick-grid" id="editPicks"></div>
+    <div class="sheet-head">
+      <h3>記録を編集</h3>
     </div>
-    <div class="field"><label>時刻</label><input id="editTime" type="datetime-local" /></div>
-    <div class="field"><label>メモ</label><textarea id="editNote" placeholder="（任意）"></textarea></div>
-    <div class="actions">
-      <button class="btn btn-primary" id="editSave">保存</button>
-      <button class="btn btn-ghost" id="editClose">閉じる</button>
+    <div class="sheet-body">
+      <div class="field">
+        <label>アイコン</label>
+        <div class="pick-grid" id="editPicks"></div>
+      </div>
+      <div class="field"><label>時刻</label><input id="editTime" type="datetime-local" /></div>
+      <div class="field"><label>メモ</label><textarea id="editNote" placeholder="（任意）"></textarea></div>
+      <div class="actions">
+        <button class="btn btn-primary" id="editSave">保存</button>
+        <button class="btn btn-ghost" id="editClose">閉じる</button>
+      </div>
+      <div class="actions"><button class="btn btn-danger" id="editDelete">この記録を削除</button></div>
     </div>
-    <div class="actions"><button class="btn btn-danger" id="editDelete">この記録を削除</button></div>
   </div>
 </div>
 
@@ -572,7 +564,7 @@ function renderPalette(){
       b.className="chip"+(on?" sel":"");
       b.setAttribute("aria-pressed",on?"true":"false");
       b.setAttribute("aria-label",`選択：${it.lbl}`);
-      b.innerHTML=`<span class="check">✓</span><span class="emo">${escapeHtml(it.emo)}</span><span class="lbl">${escapeHtml(it.lbl)}</span>`;
+      b.innerHTML=`<span class="emo">${escapeHtml(it.emo)}</span><span class="lbl">${escapeHtml(it.lbl)}</span>`;
       b.addEventListener("click",()=>toggleSelect(it,b));
       grid.appendChild(b);
     });
@@ -593,7 +585,7 @@ function renderPalette(){
       b.className="chip"+(on?" sel":"");
       b.setAttribute("aria-pressed",on?"true":"false");
       b.setAttribute("aria-label",`選択：${it.lbl}`);
-      b.innerHTML=`<span class="check">✓</span><span class="emo">${escapeHtml(it.emo)}</span><span class="lbl">${escapeHtml(it.lbl)}</span>`;
+      b.innerHTML=`<span class="emo">${escapeHtml(it.emo)}</span><span class="lbl">${escapeHtml(it.lbl)}</span>`;
       b.addEventListener("click",()=>toggleSelect(it,b));
       grid.appendChild(b);
     });
@@ -755,9 +747,9 @@ function renderEditPicks(){
   S.palette.forEach(it=>{
     const on=editSelected.has(it.id);
     const b=document.createElement("button");
-    b.className="pick"+(on?" sel":"");
+    b.className="chip"+(on?" sel":"");
     b.setAttribute("aria-pressed", on?"true":"false");
-    b.innerHTML=`<span class="check">✓</span><span class="emo">${escapeHtml(it.emo)}</span><span class="lbl">${escapeHtml(it.lbl)}</span>`;
+    b.innerHTML=`<span class="emo">${escapeHtml(it.emo)}</span><span class="lbl">${escapeHtml(it.lbl)}</span>`;
     b.addEventListener("click",()=>{
       if(editSelected.has(it.id)) editSelected.delete(it.id); else editSelected.add(it.id);
       b.classList.toggle("sel", editSelected.has(it.id));
@@ -1033,7 +1025,7 @@ function openFilter(){
     const grid=document.createElement("div"); grid.className="filter-icon-grid";
     items.forEach(it=>{
       const b=document.createElement("button");
-      b.className="filter-icon"+(filter.icons.has(it.emo)?" sel":"");
+      b.className="chip"+(filter.icons.has(it.emo)?" sel":"");
       b.innerHTML=`<span class="emo">${escapeHtml(it.emo)}</span><span class="lbl">${escapeHtml(it.lbl)}</span>`;
       b.addEventListener("click",()=>{
         filter.icons.has(it.emo)?filter.icons.delete(it.emo):filter.icons.add(it.emo);
