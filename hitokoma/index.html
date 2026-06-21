@@ -814,7 +814,7 @@ function renderReminder(){
 async function exportJSON(){
   const entries=await Store.allEntries();
   const data={app:"hitokoma",version:2,exportedAt:new Date().toISOString(),
-    settings:{theme:S.theme,reminderDays:S.reminderDays}, genres:S.genres, palette:S.palette, entries};
+    settings:{theme:S.theme,reminderDays:S.reminderDays,weekStart:S.weekStart}, genres:S.genres, palette:S.palette, entries};
   const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
   const url=URL.createObjectURL(blob);
   const a=document.createElement("a");
@@ -845,9 +845,13 @@ async function doImport(file){
   }
   if(Array.isArray(data.genres)&&data.genres.length){ S.genres=data.genres; await Store.setMeta("genres",S.genres); }
   if(Array.isArray(data.palette)&&data.palette.length){
-    // palette item に id/genre を補完して取り込む。
-    S.palette=data.palette.map(p=>({id:p.id||uid(),emo:p.emo||"⭐",lbl:p.lbl||"項目",genre:p.genre??((S.genres[0]&&S.genres[0].key)||"life")}));
+    S.palette=data.palette.map(p=>({id:p.id||uid(),emo:p.emo||"⭐",lbl:p.lbl||"項目",genre:p.genre??((S.genres[0]&&S.genres[0].key)||null)}));
     await Store.setMeta("palette",S.palette);
+  }
+  if(data.settings){
+    if(data.settings.theme){ S.theme=data.settings.theme; await Store.setMeta("theme",S.theme); applyTheme(); }
+    if(typeof data.settings.reminderDays==="number"){ S.reminderDays=data.settings.reminderDays; await Store.setMeta("reminderDays",S.reminderDays); }
+    if(typeof data.settings.weekStart==="number"){ S.weekStart=data.settings.weekStart; await Store.setMeta("weekStart",S.weekStart); }
   }
   toast(`${n}件を取り込みました`);
   feedLimit=FEED_PAGE;
