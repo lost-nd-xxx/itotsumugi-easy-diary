@@ -100,21 +100,28 @@
   .date-divider span{font-family:var(--serif); letter-spacing:.02em}
   .more-btn{margin:14px 0 4px; width:100%}
   .more-btn[hidden]{display:none}
-  .thread{position:relative; margin-left:6px; padding-left:22px}
-  .thread::before{content:""; position:absolute; left:4.5px; top:8px; bottom:8px; width:2px; background:var(--line)}
-  .node{position:relative; padding:11px 0}
-  .node::before{content:""; position:absolute; left:-22px; top:18px; width:11px; height:11px; border-radius:50%;
-    background:var(--surface); border:2.5px solid var(--accent); z-index:1}
+  .thread{margin-left:6px; position:relative; padding-left:22px}
+  .thread::before{content:""; position:absolute; left:5px; top:0; bottom:0; width:2px; background:var(--line)}
+  .node{display:flex; gap:10px; align-items:center; padding:5px 0; position:relative; min-width:0}
+  .node-dot{width:12px; height:12px; border-radius:50%; background:var(--surface); border:2.5px solid var(--accent);
+    flex-shrink:0; margin-left:-22px; z-index:1; position:relative}
   .node-card{display:flex; gap:11px; align-items:flex-start; background:var(--surface); border:1px solid var(--line);
-    border-radius:var(--radius-sm); padding:10px 12px; box-shadow:var(--shadow); width:100%; text-align:left}
+    border-radius:var(--radius-sm); padding:10px 12px; box-shadow:var(--shadow); width:100%; min-width:0; text-align:left}
   .node-card:hover{border-color:var(--accent)}
   .node-emos{display:flex; flex-wrap:wrap; gap:3px; align-items:flex-start}
   .node-emo{font-size:23px; line-height:1.2}
+  .node-emo-more{font-size:12px; color:var(--muted); align-self:flex-end; padding-bottom:3px}
   .node-body{flex:1; min-width:0}
   .node-top{display:flex; align-items:baseline; gap:8px}
-  .node-label{font-weight:600; font-size:14.5px}
-  .node-time{font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums}
+  .node-label{font-weight:600; font-size:14.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .node-time{font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap}
   .node-note{font-size:14px; color:var(--ink); margin-top:2px; white-space:pre-wrap; word-break:break-word}
+  /* 拡張カード（複数アイコン or メモあり） */
+  .node-card.expanded{flex-direction:column; gap:4px; min-width:0; width:0; flex:1}
+  .node-card.expanded .node-emos{flex-wrap:nowrap}
+  .node-card.expanded .node-header{display:flex; align-items:center; gap:8px; width:100%}
+  .node-card.expanded .node-label{font-size:14.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; width:100%}
+  .node-card.expanded .node-note{margin-top:0; font-size:14px}
   .empty{text-align:center; color:var(--muted); padding:34px 16px; font-size:14px}
   .empty .e{font-size:30px; display:block; margin-bottom:8px; opacity:.7}
 
@@ -130,7 +137,7 @@
   /* ===== モーダル ===== */
   .scrim{position:fixed; inset:0; background:rgba(20,22,20,.42); display:none; align-items:flex-end; justify-content:center; z-index:30}
   .scrim.open{display:flex}
-  .sheet{background:var(--paper); width:100%; max-width:560px; border-radius:20px 20px 0 0; padding:20px 20px calc(24px + env(safe-area-inset-bottom));
+  .sheet{background:var(--paper); width:100%; max-width:560px; box-sizing:border-box; border-radius:20px 20px 0 0; padding:20px 20px calc(24px + env(safe-area-inset-bottom));
     max-height:88vh; overflow:auto; box-shadow:0 -8px 40px rgba(0,0,0,.18); animation:rise .22s ease}
   @keyframes rise{from{transform:translateY(20px); opacity:.6}to{transform:none; opacity:1}}
   .sheet h3{font-family:var(--serif); font-size:19px; margin:2px 0 16px}
@@ -181,6 +188,7 @@
   .cal-cell{border-right:1px solid var(--line); border-bottom:1px solid var(--line);
     padding:2px; cursor:pointer; position:relative}
   .cal-cell.other-month{opacity:.35}
+  .cal-cell.filtered-out .cal-inner{opacity:.3}
   /* ハイライトはインナーに閉じて角丸と罫線を共存させる */
   .cal-inner{min-height:48px; border-radius:var(--radius-sm); padding:4px 3px 3px;
     display:flex; flex-direction:column; align-items:center; gap:2px; transition:background .12s}
@@ -192,6 +200,23 @@
   .cal-day.sat{color:var(--accent)}
   .cal-icons{display:flex; flex-wrap:wrap; justify-content:center; gap:1px; margin-top:1px}
   .cal-ic{font-size:13px; line-height:1}
+
+  /* ===== 絞り込みシート ===== */
+  .filter-genre-row{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px}
+  .filter-genre{background:var(--surface-2); border:1px solid var(--line); border-radius:999px;
+    padding:7px 15px; font-size:13.5px; color:var(--muted); cursor:pointer}
+  .filter-genre.sel{background:var(--accent-soft); border-color:var(--accent); color:var(--accent-ink); font-weight:600}
+  .filter-icon-grid{display:grid; grid-template-columns:repeat(5,1fr); gap:6px; margin-bottom:8px}
+  .filter-icon{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-sm);
+    padding:8px 2px; display:flex; flex-direction:column; align-items:center; gap:2px; cursor:pointer}
+  .filter-icon.sel{background:var(--accent-soft); border-color:var(--accent)}
+  .filter-icon .emo{font-size:20px}
+  .filter-icon .lbl{font-size:10px; color:var(--muted); text-align:center}
+  .filter-icon.sel .lbl{color:var(--accent-ink)}
+  .filter-sec{margin-bottom:4px; font-size:12px; color:var(--muted); font-weight:600; letter-spacing:.04em}
+  /* 絞り込み中バッジ（フィード/カレンダー見出し） */
+  .filter-badge{display:inline-flex; align-items:center; gap:5px; background:var(--accent-soft);
+    color:var(--accent-ink); border-radius:999px; padding:3px 10px; font-size:12px; font-weight:600; margin-left:8px; cursor:pointer}
 
   /* トースト */
   .toast{position:fixed; left:50%; bottom:calc(86px + env(safe-area-inset-bottom)); transform:translateX(-50%) translateY(10px);
@@ -265,7 +290,8 @@
 
 <nav class="tabbar">
   <button id="tabCal"><span class="ic">📅</span>カレンダー</button>
-  <button id="tabToday"><span class="ic">●</span>ホーム</button>
+  <button id="tabToday"><span class="ic">🧵</span>ホーム</button>
+  <button id="tabFilter"><span class="ic">🔍</span>絞り込み<span id="filterBadge" hidden style="font-size:10px;vertical-align:super;color:var(--accent)">●</span></button>
   <button id="tabExport"><span class="ic">⤓</span>書き出し</button>
   <button id="tabSettings"><span class="ic">⚙</span>設定</button>
 </nav>
@@ -286,6 +312,18 @@
       <button class="btn btn-ghost" id="editClose">閉じる</button>
     </div>
     <div class="actions"><button class="btn btn-danger" id="editDelete">この記録を削除</button></div>
+  </div>
+</div>
+
+<!-- 絞り込みシート -->
+<div class="scrim" id="filterScrim">
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="絞り込み">
+    <h3>絞り込み</h3>
+    <div id="filterBody"></div>
+    <div class="actions" style="margin-top:16px">
+      <button class="btn btn-ghost" id="filterClear">クリア</button>
+      <button class="btn btn-primary" id="filterApply">適用</button>
+    </div>
   </div>
 </div>
 
@@ -415,11 +453,22 @@ const S={ viewDate:new Date(), palette:[], genres:[], theme:"auto", reminderDays
 let editingId=null, editPickSel=null;
 // 記録の選択状態（パレット項目 id の集合）。記録ボタン押下で1件に確定する。
 const selected=new Set();
-// 画面モード："feed"=紡いだ糸（全日横断ホーム） / "day"=その日ビュー
+// 画面モード："feed"=紡いだ糸（全日横断ホーム） / "day"=その日ビュー / "cal"=カレンダー
 let viewMode="feed";
 // フィードのページング（初期10件、もっと見るで +10）
 const FEED_PAGE=10;
 let feedLimit=FEED_PAGE;
+// 絞り込み状態（両方空 = 絞り込みなし）
+const filter={ genres:new Set(), icons:new Set() };
+function filterActive(){ return filter.genres.size>0||filter.icons.size>0; }
+// 1件の entry が絞り込み条件に一致するか（OR判定）
+function entryMatches(e){
+  if(!filterActive()) return true;
+  return (e.icons||[]).some(ic=>
+    (filter.genres.size>0&&filter.genres.has(ic.genre))||
+    (filter.icons.size>0&&filter.icons.has(ic.emo))
+  );
+}
 
 // ---------- 日付ユーティリティ ----------
 const pad=n=>String(n).padStart(2,"0");
@@ -488,19 +537,37 @@ function updateCommitBtn(){
   btn.disabled=n===0;
   if(n>1){ cnt.hidden=false; cnt.textContent=String(n); } else { cnt.hidden=true; }
 }
+
 // 1件分のカードノード（糸の点）。フィード・その日ビュー共通。
 function makeEntryNode(e){
   const node=document.createElement("div"); node.className="node";
+  const dot=document.createElement("div"); dot.className="node-dot";
   const card=document.createElement("button"); card.className="node-card";
   const icons=e.icons||[];
-  const emos=icons.map(ic=>`<span class="node-emo">${ic.emo}</span>`).join("");
+  const MAX_EMO=4;
+  const shownIcons=icons.slice(0,MAX_EMO);
+  const extra=icons.length-MAX_EMO;
+  const emos=shownIcons.map(ic=>`<span class="node-emo">${ic.emo}</span>`).join("")
+    +(extra>0?`<span class="node-emo-more">+${extra}</span>`:"");
   const label=icons.map(ic=>ic.lbl).filter(Boolean).join("・");
-  card.innerHTML=`<span class="node-emos">${emos}</span>
-    <span class="node-body">
-      <span class="node-top"><span class="node-label">${escapeHtml(label)}</span><span class="node-time">${fmtTime(e.ts)}</span></span>
-      ${e.note?`<span class="node-note">${escapeHtml(e.note)}</span>`:""}
-    </span>`;
+  const expanded=icons.length>1||!!e.note;
+  if(expanded){
+    card.classList.add("expanded");
+    card.innerHTML=`
+      <div class="node-header">
+        <span class="node-emos">${emos}</span>
+        <span class="node-time">${fmtTime(e.ts)}</span>
+      </div>
+      ${label?`<div class="node-label">${escapeHtml(label)}</div>`:""}
+      ${e.note?`<span class="node-note">${escapeHtml(e.note)}</span>`:""}`;
+  } else {
+    card.innerHTML=`<span class="node-emos">${emos}</span>
+      <span class="node-body">
+        <span class="node-top"><span class="node-label">${escapeHtml(label)}</span><span class="node-time">${fmtTime(e.ts)}</span></span>
+      </span>`;
+  }
   card.addEventListener("click",()=>openEditor(e));
+  node.appendChild(dot);
   node.appendChild(card);
   return node;
 }
@@ -508,12 +575,16 @@ function makeEntryNode(e){
 // ホーム：紡いだ糸（全日付横断・新しい順・初期10件＋もっと見る）
 async function renderFeed(){
   const slot=document.getElementById("feedSlot");
-  let list=await Store.allEntries();
-  list.sort((a,b)=>b.ts-a.ts); // 新しい順
+  let all=await Store.allEntries();
+  all.sort((a,b)=>b.ts-a.ts); // 新しい順
+  // 絞り込みフィルタ適用
+  const list=filterActive()?all.filter(entryMatches):all;
   const total=list.length;
-  document.getElementById("feedCount").textContent=total?`${total}件の記録`:"";
+  const countEl=document.getElementById("feedCount");
+  countEl.textContent=total?`${total}件の記録`:"";
   if(!total){
-    slot.innerHTML=`<div class="empty"><span class="e">𓂃</span>まだ記録がありません。<br>上のアイコンを選んで「記録」を押すと、ここに連なります。</div>`;
+    const msg=filterActive()?"絞り込み条件に一致する記録がありません。":"まだ記録がありません。<br>上のアイコンを選んで「記録」を押すと、ここに連なります。";
+    slot.innerHTML=`<div class="empty"><span class="e">𓂃</span>${msg}</div>`;
     document.getElementById("moreBtn").hidden=true;
     return;
   }
@@ -754,6 +825,9 @@ function wire(){
   document.getElementById("calPrev").onclick=()=>{ S.calDate=new Date(S.calDate.getFullYear(),S.calDate.getMonth()-1,1); renderCal(); };
   document.getElementById("calNext").onclick=()=>{ S.calDate=new Date(S.calDate.getFullYear(),S.calDate.getMonth()+1,1); renderCal(); };
 
+  document.getElementById("tabFilter").onclick=openFilter;
+  document.getElementById("filterClear").onclick=clearFilter;
+  document.getElementById("filterApply").onclick=applyFilter;
   document.getElementById("tabExport").onclick=exportJSON;
   document.getElementById("tabSettings").onclick=openSettings;
   document.getElementById("setClose").onclick=()=>closeScrim("setScrim");
@@ -777,6 +851,84 @@ function wire(){
     document.querySelectorAll("#themeSeg button").forEach(x=>x.classList.toggle("on",x===b));
   });
 }
+// ---------- 絞り込み ----------
+function openFilter(){
+  const body=document.getElementById("filterBody");
+  body.innerHTML="";
+
+  // ジャンル選択行
+  const genreLabel=document.createElement("div"); genreLabel.className="filter-sec"; genreLabel.textContent="ジャンル";
+  body.appendChild(genreLabel);
+  const genreRow=document.createElement("div"); genreRow.className="filter-genre-row";
+  S.genres.forEach(g=>{
+    const b=document.createElement("button");
+    b.className="filter-genre"+(filter.genres.has(g.key)?" sel":"");
+    b.textContent=g.label;
+    b.addEventListener("click",()=>{
+      filter.genres.has(g.key)?filter.genres.delete(g.key):filter.genres.add(g.key);
+      b.classList.toggle("sel",filter.genres.has(g.key));
+    });
+    genreRow.appendChild(b);
+  });
+  body.appendChild(genreRow);
+
+  // 個別アイコン選択（ジャンルごとにセクション）
+  const iconLabel=document.createElement("div"); iconLabel.className="filter-sec"; iconLabel.textContent="個別アイコン";
+  body.appendChild(iconLabel);
+  S.genres.forEach(g=>{
+    const items=S.palette.filter(p=>p.genre===g.key);
+    if(!items.length) return;
+    const secLabel=document.createElement("div");
+    secLabel.style.cssText="font-size:11.5px;color:var(--muted);margin:8px 0 4px;";
+    secLabel.textContent=g.label;
+    body.appendChild(secLabel);
+    const grid=document.createElement("div"); grid.className="filter-icon-grid";
+    items.forEach(it=>{
+      const b=document.createElement("button");
+      b.className="filter-icon"+(filter.icons.has(it.emo)?" sel":"");
+      b.innerHTML=`<span class="emo">${it.emo}</span><span class="lbl">${escapeHtml(it.lbl)}</span>`;
+      b.addEventListener("click",()=>{
+        filter.icons.has(it.emo)?filter.icons.delete(it.emo):filter.icons.add(it.emo);
+        b.classList.toggle("sel",filter.icons.has(it.emo));
+      });
+      grid.appendChild(b);
+    });
+    body.appendChild(grid);
+  });
+
+  openScrim("filterScrim");
+}
+
+async function applyFilter(){
+  closeScrim("filterScrim");
+  feedLimit=FEED_PAGE;
+  updateFilterBadge();
+  await refreshViews();
+}
+
+function clearFilter(){
+  filter.genres.clear(); filter.icons.clear();
+  // シート内の sel を外す
+  document.querySelectorAll("#filterBody .sel").forEach(b=>b.classList.remove("sel"));
+}
+
+// フィード/カレンダー見出しの絞り込みバッジを更新
+function updateFilterBadge(){
+  const tabBadge=document.getElementById("filterBadge");
+  if(tabBadge) tabBadge.hidden=!filterActive();
+  ["feedView","calView"].forEach(id=>{
+    const head=document.querySelector(`#${id} .thread-head, #${id} .cal-header`);
+    if(!head) return;
+    const old=head.querySelector(".filter-badge");
+    if(old) old.remove();
+    if(!filterActive()) return;
+    const badge=document.createElement("span"); badge.className="filter-badge";
+    badge.textContent="絞り込み中 ✕";
+    badge.addEventListener("click",async()=>{ filter.genres.clear(); filter.icons.clear(); updateFilterBadge(); feedLimit=FEED_PAGE; await refreshViews(); });
+    head.appendChild(badge);
+  });
+}
+
 // ---------- ビュー切替 ----------
 function showFeed(){
   viewMode="feed";
@@ -817,12 +969,17 @@ async function renderCal(){
   const monthEnd=new Date(y,m+1,1).getTime();
   const entries=await Store.entriesInRange(monthStart,monthEnd);
 
-  // 日ごとに「最後の記録」を集約
-  const dayMap=new Map(); // dayKey(ms) -> entry[]
+  // 日ごとに記録を集約。絞り込み時は該当記録のみ残す（非該当日は dayMap に入らない）
+  const dayMap=new Map();    // dayKey(ms) -> entry[]（表示用・絞り込み済み）
+  const dayMapAll=new Map(); // dayKey(ms) -> entry[]（全件。非該当日の淡色判定用）
   entries.forEach(e=>{
     const k=dayStart(e.ts);
-    if(!dayMap.has(k)) dayMap.set(k,[]);
-    dayMap.get(k).push(e);
+    if(!dayMapAll.has(k)) dayMapAll.set(k,[]);
+    dayMapAll.get(k).push(e);
+    if(entryMatches(e)){
+      if(!dayMap.has(k)) dayMap.set(k,[]);
+      dayMap.get(k).push(e);
+    }
   });
 
   // グリッドを構築
@@ -854,8 +1011,14 @@ async function renderCal(){
   }
   // 当月
   for(let d=1;d<=daysInMonth;d++){
-    const cell=makeCalCell(new Date(y,m,d),false,dayMap);
-    if(isSameDay(new Date(y,m,d),today)) cell.classList.add("today");
+    const date=new Date(y,m,d);
+    const cell=makeCalCell(date,false,dayMap);
+    if(isSameDay(date,today)) cell.classList.add("today");
+    // 絞り込み中：記録はあるが該当なしの日を淡色化
+    if(filterActive()){
+      const k=dayStart(date.getTime());
+      if(dayMapAll.has(k)&&!dayMap.has(k)) cell.classList.add("filtered-out");
+    }
     grid.appendChild(cell);
   }
   // 翌月の埋め（6行に揃える）
