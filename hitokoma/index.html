@@ -169,6 +169,30 @@
   .pick.sel{border-color:var(--accent); background:var(--accent-soft)}
   .pick .emo{font-size:22px} .pick .lbl{font-size:10px; color:var(--muted)}
 
+  /* ===== カレンダー ===== */
+  .cal-header{display:flex; align-items:center; justify-content:space-between; margin:18px 4px 10px}
+  .cal-month{font-family:var(--serif); font-size:18px; letter-spacing:.02em}
+  .cal-grid{display:grid; grid-template-columns:repeat(7,1fr); gap:0;
+    border-left:1px solid var(--line); border-top:1px solid var(--line)}
+  .cal-dow{text-align:center; font-size:11px; color:var(--muted); padding:5px 0;
+    font-weight:600; border-right:1px solid var(--line); border-bottom:1px solid var(--line); background:var(--surface)}
+  .cal-dow.sun{color:var(--danger)}
+  .cal-dow.sat{color:var(--accent)}
+  .cal-cell{border-right:1px solid var(--line); border-bottom:1px solid var(--line);
+    padding:2px; cursor:pointer; position:relative}
+  .cal-cell.other-month{opacity:.35}
+  /* ハイライトはインナーに閉じて角丸と罫線を共存させる */
+  .cal-inner{min-height:48px; border-radius:var(--radius-sm); padding:4px 3px 3px;
+    display:flex; flex-direction:column; align-items:center; gap:2px; transition:background .12s}
+  .cal-cell:hover .cal-inner{background:var(--surface-2)}
+  .cal-cell.today .cal-inner{background:var(--accent-soft)}
+  .cal-cell.today .cal-day{color:var(--accent); font-weight:700}
+  .cal-day{font-size:12px; font-variant-numeric:tabular-nums; line-height:1; color:var(--ink)}
+  .cal-day.sun{color:var(--danger)}
+  .cal-day.sat{color:var(--accent)}
+  .cal-icons{display:flex; flex-wrap:wrap; justify-content:center; gap:1px; margin-top:1px}
+  .cal-ic{font-size:13px; line-height:1}
+
   /* トースト */
   .toast{position:fixed; left:50%; bottom:calc(86px + env(safe-area-inset-bottom)); transform:translateX(-50%) translateY(10px);
     background:var(--ink); color:var(--paper); padding:10px 16px; border-radius:999px; font-size:13.5px; font-weight:600;
@@ -227,10 +251,21 @@
     </div>
     <div id="threadSlot"></div>
   </section>
+
+  <!-- カレンダービュー（既定は非表示） -->
+  <section id="calView" hidden>
+    <div class="cal-header">
+      <button class="nav-btn" id="calPrev" aria-label="前の月">‹</button>
+      <span class="cal-month" id="calMonth"></span>
+      <button class="nav-btn" id="calNext" aria-label="次の月">›</button>
+    </div>
+    <div class="cal-grid" id="calGrid"></div>
+  </section>
 </div>
 
 <nav class="tabbar">
-  <button id="tabToday"><span class="ic">●</span>今日</button>
+  <button id="tabCal"><span class="ic">📅</span>カレンダー</button>
+  <button id="tabToday"><span class="ic">●</span>ホーム</button>
   <button id="tabExport"><span class="ic">⤓</span>書き出し</button>
   <button id="tabSettings"><span class="ic">⚙</span>設定</button>
 </nav>
@@ -376,7 +411,7 @@ const DEFAULT_PALETTE=[
 ].map(p=>({id:uid(),...p}));
 
 // ---------- 状態 ----------
-const S={ viewDate:new Date(), palette:[], genres:[], theme:"auto", reminderDays:7, lastBackup:null, dismissReminder:false };
+const S={ viewDate:new Date(), palette:[], genres:[], theme:"auto", reminderDays:7, lastBackup:null, dismissReminder:false, weekStart:0, calDate:new Date() };
 let editingId=null, editPickSel=null;
 // 記録の選択状態（パレット項目 id の集合）。記録ボタン押下で1件に確定する。
 const selected=new Set();
@@ -546,10 +581,11 @@ async function commitEntry(){
   await refreshViews();
 }
 
-// 表示中のビューを最新化（フィードは常に、その日ビューは開いていれば）
+// 表示中のビューを最新化
 async function refreshViews(){
   await renderFeed();
   if(viewMode==="day") await renderThread();
+  if(viewMode==="cal") await renderCal();
 }
 
 // ---------- 編集シート ----------
@@ -712,8 +748,11 @@ function wire(){
   document.getElementById("moreBtn").onclick=async()=>{ feedLimit+=FEED_PAGE; await renderFeed(); };
   document.getElementById("dayBack").onclick=()=>showFeed();
 
-  // ホームタブ
+  // ホームタブ / カレンダータブ
   document.getElementById("tabToday").onclick=()=>{ showFeed(); window.scrollTo({top:0,behavior:"smooth"}); };
+  document.getElementById("tabCal").onclick=()=>{ showCal(); window.scrollTo({top:0,behavior:"smooth"}); };
+  document.getElementById("calPrev").onclick=()=>{ S.calDate=new Date(S.calDate.getFullYear(),S.calDate.getMonth()-1,1); renderCal(); };
+  document.getElementById("calNext").onclick=()=>{ S.calDate=new Date(S.calDate.getFullYear(),S.calDate.getMonth()+1,1); renderCal(); };
 
   document.getElementById("tabExport").onclick=exportJSON;
   document.getElementById("tabSettings").onclick=openSettings;
@@ -759,6 +798,107 @@ async function showDay(date){
   await renderThread();
 }
 
+// カレンダービューを表示
+async function showCal(){
+  viewMode="cal";
+  document.getElementById("feedView").hidden=true;
+  document.getElementById("dayView").hidden=true;
+  document.getElementById("calView").hidden=false;
+  await renderCal();
+}
+
+// カレンダーを描画（S.calDate の月を表示）
+async function renderCal(){
+  const y=S.calDate.getFullYear(), m=S.calDate.getMonth();
+  document.getElementById("calMonth").textContent=`${y}年${m+1}月`;
+
+  // その月の全エントリを取得（月初〜月末）
+  const monthStart=new Date(y,m,1).getTime();
+  const monthEnd=new Date(y,m+1,1).getTime();
+  const entries=await Store.entriesInRange(monthStart,monthEnd);
+
+  // 日ごとに「最後の記録」を集約
+  const dayMap=new Map(); // dayKey(ms) -> entry[]
+  entries.forEach(e=>{
+    const k=dayStart(e.ts);
+    if(!dayMap.has(k)) dayMap.set(k,[]);
+    dayMap.get(k).push(e);
+  });
+
+  // グリッドを構築
+  const grid=document.getElementById("calGrid");
+  grid.innerHTML="";
+  const ws=S.weekStart; // 0=日曜, 1=月曜
+  const DOW_LABELS=["日","月","火","水","木","金","土"];
+  // weekStart に従って曜日ヘッダを並べる
+  for(let i=0;i<7;i++){
+    const di=(i+ws)%7;
+    const el=document.createElement("div");
+    el.className="cal-dow"+(di===0?" sun":di===6?" sat":"");
+    el.textContent=DOW_LABELS[di];
+    grid.appendChild(el);
+  }
+
+  // 月初の曜日オフセット
+  const firstDow=new Date(y,m,1).getDay(); // 0=日
+  const offset=(firstDow-ws+7)%7;
+  const daysInMonth=new Date(y,m+1,0).getDate();
+  const today=new Date();
+
+  // 前月の埋め（空セル or 前月日付）
+  const prevMonthDays=new Date(y,m,0).getDate();
+  for(let i=0;i<offset;i++){
+    const day=prevMonthDays-offset+1+i;
+    const cell=makeCalCell(new Date(y,m-1,day),true,dayMap);
+    grid.appendChild(cell);
+  }
+  // 当月
+  for(let d=1;d<=daysInMonth;d++){
+    const cell=makeCalCell(new Date(y,m,d),false,dayMap);
+    if(isSameDay(new Date(y,m,d),today)) cell.classList.add("today");
+    grid.appendChild(cell);
+  }
+  // 翌月の埋め（6行に揃える）
+  const total=offset+daysInMonth;
+  const rows=Math.ceil(total/7);
+  const remain=rows*7-total;
+  for(let d=1;d<=remain;d++){
+    const cell=makeCalCell(new Date(y,m+1,d),true,dayMap);
+    grid.appendChild(cell);
+  }
+}
+
+function makeCalCell(date,otherMonth,dayMap){
+  const cell=document.createElement("div");
+  cell.className="cal-cell"+(otherMonth?" other-month":"");
+  const inner=document.createElement("div"); inner.className="cal-inner";
+
+  const dow=date.getDay();
+  const dayEl=document.createElement("div");
+  dayEl.className="cal-day"+(dow===0?" sun":dow===6?" sat":"");
+  dayEl.textContent=date.getDate();
+  inner.appendChild(dayEl);
+
+  // その日の記録アイコン（最後の記録、最大3個）
+  const k=dayStart(date.getTime());
+  if(dayMap.has(k)){
+    const list=dayMap.get(k).sort((a,b)=>b.ts-a.ts);
+    const icons=(list[0].icons||[]).slice(0,3);
+    if(icons.length){
+      const icRow=document.createElement("div"); icRow.className="cal-icons";
+      icons.forEach(ic=>{
+        const s=document.createElement("span"); s.className="cal-ic"; s.textContent=ic.emo;
+        icRow.appendChild(s);
+      });
+      inner.appendChild(icRow);
+    }
+  }
+
+  cell.appendChild(inner);
+  cell.addEventListener("click",()=>showDay(date));
+  return cell;
+}
+
 // ---------- マイグレーション（meta.schema で冪等化） ----------
 // 既存ユーザーは存在しないため、過去形式（v1）からの変換ロジックは持たない。
 // 将来データ形式を破壊的に変えたときに、ここへ「from→to」の段階的変換を足す。
@@ -787,6 +927,7 @@ async function boot(){
   S.theme=await Store.getMeta("theme","auto");
   S.reminderDays=await Store.getMeta("reminderDays",7);
   S.lastBackup=await Store.getMeta("lastBackup",null);
+  S.weekStart=await Store.getMeta("weekStart",0);
   applyTheme(); wire();
   renderPalette(); updateCommitBtn(); resetDetails();
   showFeed(); await renderFeed(); renderReminder();
