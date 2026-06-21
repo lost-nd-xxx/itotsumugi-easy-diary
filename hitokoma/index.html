@@ -83,6 +83,7 @@
   .node-card{display:flex; gap:11px; align-items:flex-start; background:var(--surface); border:1px solid var(--line);
     border-radius:var(--radius-sm); padding:10px 12px; box-shadow:var(--shadow); width:100%; text-align:left}
   .node-card:hover{border-color:var(--accent)}
+  .node-emos{display:flex; flex-wrap:wrap; gap:3px; align-items:flex-start}
   .node-emo{font-size:23px; line-height:1.2}
   .node-body{flex:1; min-width:0}
   .node-top{display:flex; align-items:baseline; gap:8px}
@@ -299,16 +300,37 @@ const Store={
   async setMeta(k,v){ await reqP(tx(this.db,"meta","readwrite").put({k,v})); },
 };
 
-// ---------- 既定パレット ----------
-const DEFAULT_PALETTE=[
-  {emo:"😊",lbl:"うれしい"},{emo:"🙂",lbl:"おだやか"},{emo:"😐",lbl:"ふつう"},
-  {emo:"😔",lbl:"しずんでる"},{emo:"😣",lbl:"つらい"},{emo:"😟",lbl:"不安"},
-  {emo:"😴",lbl:"ねむい"},{emo:"☕",lbl:"ひとやすみ"},{emo:"🍚",lbl:"ごはん"},
-  {emo:"📖",lbl:"読書"},{emo:"✍️",lbl:"制作"},{emo:"🎮",lbl:"あそび"},
+// ---------- スキーマ版 ----------
+// データ形式を破壊的に変えたら上げる。起動時に meta.schema と突き合わせて
+// 冪等にマイグレーションする（現状は v2 が初期形式。過去形式の変換ロジックは持たない）。
+const SCHEMA=2;
+
+// ---------- 既定ジャンル（データ駆動：固定ハードコードしない） ----------
+// 増減 UI は v2 スコープ外。今は3ジャンル固定運用だが、配列を起点に動的描画する。
+const DEFAULT_GENRES=[
+  {key:"mood",  label:"気分"},
+  {key:"health",label:"体調"},
+  {key:"life",  label:"生活"},
 ];
 
+// ---------- 既定パレット（v2：各ジャンル6個 / 5-9） ----------
+const DEFAULT_PALETTE=[
+  // 気分(mood)
+  {emo:"😄",lbl:"楽しい",  genre:"mood"},{emo:"🙂",lbl:"穏やか",  genre:"mood"},
+  {emo:"😐",lbl:"普通",    genre:"mood"},{emo:"😴",lbl:"眠い",    genre:"mood"},
+  {emo:"😟",lbl:"ややつらい",genre:"mood"},{emo:"😣",lbl:"つらい",  genre:"mood"},
+  // 体調(health)
+  {emo:"🤕",lbl:"頭痛",    genre:"health"},{emo:"😖",lbl:"腹痛",    genre:"health"},
+  {emo:"🩸",lbl:"生理",    genre:"health"},{emo:"💊",lbl:"服薬",    genre:"health"},
+  {emo:"😮‍💨",lbl:"疲労",  genre:"health"},{emo:"😪",lbl:"眠気",    genre:"health"},
+  // 生活(life)
+  {emo:"✍️",lbl:"制作",    genre:"life"},{emo:"🎮",lbl:"遊び",    genre:"life"},
+  {emo:"☕",lbl:"休息",    genre:"life"},{emo:"🚶",lbl:"お出かけ",genre:"life"},
+  {emo:"🏃",lbl:"運動",    genre:"life"},{emo:"🛒",lbl:"買い物",  genre:"life"},
+].map(p=>({id:uid(),...p}));
+
 // ---------- 状態 ----------
-const S={ viewDate:new Date(), palette:[], theme:"auto", reminderDays:7, lastBackup:null, dismissReminder:false };
+const S={ viewDate:new Date(), palette:[], genres:[], theme:"auto", reminderDays:7, lastBackup:null, dismissReminder:false };
 let editingId=null, editPickSel=null;
 
 // ---------- 日付ユーティリティ ----------
@@ -368,9 +390,12 @@ async function renderThread(){
   list.forEach(e=>{
     const node=document.createElement("div"); node.className="node";
     const card=document.createElement("button"); card.className="node-card";
-    card.innerHTML=`<span class="node-emo">${e.emo}</span>
+    const icons=e.icons||[];
+    const emos=icons.map(ic=>`<span class="node-emo">${ic.emo}</span>`).join("");
+    const label=icons.map(ic=>ic.lbl).filter(Boolean).join("・");
+    card.innerHTML=`<span class="node-emos">${emos}</span>
       <span class="node-body">
-        <span class="node-top"><span class="node-label">${escapeHtml(e.lbl)}</span><span class="node-time">${fmtTime(e.ts)}</span></span>
+        <span class="node-top"><span class="node-label">${escapeHtml(label)}</span><span class="node-time">${fmtTime(e.ts)}</span></span>
         ${e.note?`<span class="node-note">${escapeHtml(e.note)}</span>`:""}
       </span>`;
     card.addEventListener("click",()=>openEditor(e));
@@ -387,7 +412,8 @@ async function quickLog(it,btnEl){
   // 今日を見ているときは現在時刻、過去日を見ているときはその日の正午に置く
   let ts=Date.now();
   if(!isSameDay(S.viewDate,new Date())){ const d=new Date(S.viewDate); d.setHours(12,0,0,0); ts=d.getTime(); }
-  const e={id:uid(),ts,emo:it.emo,lbl:it.lbl,note};
+  // パレット項目を {emo,lbl,genre} のスナップショットで格納（後でパレットを変えても過去記録は不変）
+  const e={id:uid(),ts,icons:[{emo:it.emo,lbl:it.lbl,genre:it.genre??null}],note};
   await Store.addEntry(e);
   noteEl.value="";
   if(btnEl){ btnEl.classList.remove("pulse"); void btnEl.offsetWidth; btnEl.classList.add("pulse"); }
@@ -398,13 +424,15 @@ async function quickLog(it,btnEl){
 // ---------- 編集シート ----------
 function openEditor(e){
   editingId=e.id; editPickSel=null;
-  document.getElementById("editEmoji").value=e.emo;
+  // 5-1 追従の暫定編集：先頭アイコンを対象にする（複数アイコン編集 UI は 5-2 以降）
+  const first=(e.icons&&e.icons[0])||{emo:"",lbl:"",genre:null};
+  document.getElementById("editEmoji").value=first.emo;
   document.getElementById("editTime").value=localInputValue(e.ts);
   document.getElementById("editNote").value=e.note||"";
   // パレットから選び直し
   const g=document.getElementById("editPicks"); g.innerHTML="";
   S.palette.forEach(it=>{
-    const b=document.createElement("button"); b.className="pick"+((it.emo===e.emo)?" sel":"");
+    const b=document.createElement("button"); b.className="pick"+((it.emo===first.emo)?" sel":"");
     b.innerHTML=`<span class="emo">${it.emo}</span><span class="lbl">${it.lbl}</span>`;
     b.addEventListener("click",()=>{
       g.querySelectorAll(".pick").forEach(x=>x.classList.remove("sel"));
@@ -417,14 +445,16 @@ function openEditor(e){
 async function saveEdit(){
   const emo=document.getElementById("editEmoji").value.trim()|| (editPickSel?editPickSel.emo:"")||"·";
   const lbl=editPickSel?editPickSel.lbl:(matchLabel(emo));
+  const genre=editPickSel?(editPickSel.genre??null):matchGenre(emo);
   const tval=document.getElementById("editTime").value;
   const note=document.getElementById("editNote").value.trim();
   const ts=tval?new Date(tval).getTime():Date.now();
-  await Store.putEntry({id:editingId,ts,emo,lbl,note});
+  await Store.putEntry({id:editingId,ts,icons:[{emo,lbl,genre}],note});
   closeScrim("editScrim"); toast("更新しました");
   renderThread();
 }
 function matchLabel(emo){const f=S.palette.find(p=>p.emo===emo);return f?f.lbl:"記録";}
+function matchGenre(emo){const f=S.palette.find(p=>p.emo===emo);return f?(f.genre??null):null;}
 async function deleteEdit(){
   if(!confirm("この記録を削除しますか？")) return;
   await Store.deleteEntry(editingId); closeScrim("editScrim"); toast("削除しました"); renderThread();
@@ -478,8 +508,8 @@ function renderReminder(){
 // ---------- 書き出し / 読み込み ----------
 async function exportJSON(){
   const entries=await Store.allEntries();
-  const data={app:"hitokoma",version:1,exportedAt:new Date().toISOString(),
-    settings:{theme:S.theme,reminderDays:S.reminderDays}, palette:S.palette, entries};
+  const data={app:"hitokoma",version:2,exportedAt:new Date().toISOString(),
+    settings:{theme:S.theme,reminderDays:S.reminderDays}, genres:S.genres, palette:S.palette, entries};
   const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
   const url=URL.createObjectURL(blob);
   const a=document.createElement("a");
@@ -499,11 +529,20 @@ async function doImport(file){
   let n=0;
   for(const e of data.entries){
     if(!e||typeof e.ts==="undefined") continue;
-    const rec={id:e.id||uid(),ts:Number(e.ts),emo:e.emo||"·",lbl:e.lbl||"記録",note:e.note||""};
+    // v2 は icons[] を持つ。旧形式（emo/lbl）が来たら icons[] に包んで取り込む。
+    let icons;
+    if(Array.isArray(e.icons)) icons=e.icons.map(ic=>({emo:ic.emo||"·",lbl:ic.lbl||"記録",genre:ic.genre??null}));
+    else icons=[{emo:e.emo||"·",lbl:e.lbl||"記録",genre:null}];
+    const rec={id:e.id||uid(),ts:Number(e.ts),icons,note:e.note||""};
     if(mode==="merge"&&existing.has(rec.id)) continue;
     await Store.putEntry(rec); n++;
   }
-  if(Array.isArray(data.palette)&&data.palette.length){ S.palette=data.palette; await Store.setMeta("palette",S.palette); }
+  if(Array.isArray(data.genres)&&data.genres.length){ S.genres=data.genres; await Store.setMeta("genres",S.genres); }
+  if(Array.isArray(data.palette)&&data.palette.length){
+    // palette item に id/genre を補完して取り込む。
+    S.palette=data.palette.map(p=>({id:p.id||uid(),emo:p.emo||"⭐",lbl:p.lbl||"項目",genre:p.genre??((S.genres[0]&&S.genres[0].key)||"life")}));
+    await Store.setMeta("palette",S.palette);
+  }
   toast(`${n}件を取り込みました`);
   renderPalette(); renderThread(); if(document.getElementById("setScrim").classList.contains("open")) renderPalEdit();
 }
@@ -550,7 +589,10 @@ function wire(){
   document.getElementById("editClose").onclick=()=>closeScrim("editScrim");
   document.getElementById("editDelete").onclick=deleteEdit;
 
-  document.getElementById("addPal").onclick=()=>{S.palette.push({emo:"⭐",lbl:"新しい項目"}); savePalette();};
+  document.getElementById("addPal").onclick=()=>{
+    const g=(S.genres[0]&&S.genres[0].key)||"life";
+    S.palette.push({id:uid(),emo:"⭐",lbl:"新しい項目",genre:g}); savePalette();
+  };
   document.getElementById("exportBtn").onclick=exportJSON;
   document.getElementById("importBtn").onclick=pickImport;
   document.getElementById("importFile").onchange=e=>{const f=e.target.files[0]; if(f) doImport(f); e.target.value="";};
@@ -573,9 +615,29 @@ function pickDate(){
 }
 function refreshDay(){ renderHeader(); renderThread(); }
 
+// ---------- マイグレーション（meta.schema で冪等化） ----------
+// 既存ユーザーは存在しないため、過去形式（v1）からの変換ロジックは持たない。
+// 将来データ形式を破壊的に変えたときに、ここへ「from→to」の段階的変換を足す。
+async function migrate(){
+  let schema=await Store.getMeta("schema",null);
+  if(schema===null){
+    // 初回起動（または schema 未設定）。現行形式 = SCHEMA として確定するだけ。
+    await Store.setMeta("schema",SCHEMA);
+    return;
+  }
+  // 例：今後 SCHEMA を 3 に上げたら、ここで if(schema<3){ ...変換...; schema=3 } を積む。
+  if(schema!==SCHEMA){
+    // 既知の変換を全て適用し終えたら版を確定。
+    await Store.setMeta("schema",SCHEMA);
+  }
+}
+
 // ---------- 起動 ----------
 async function boot(){
   await Store.init();
+  await migrate();
+  S.genres=await Store.getMeta("genres",null);
+  if(!S.genres){ S.genres=DEFAULT_GENRES.slice(); await Store.setMeta("genres",S.genres); }
   S.palette=await Store.getMeta("palette",null);
   if(!S.palette){ S.palette=DEFAULT_PALETTE.slice(); await Store.setMeta("palette",S.palette); }
   S.theme=await Store.getMeta("theme","auto");
