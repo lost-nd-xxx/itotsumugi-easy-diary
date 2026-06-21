@@ -295,7 +295,6 @@
   <button id="tabCal"><span class="ic">📅</span>カレンダー</button>
   <button id="tabToday"><span class="ic">🧵</span>ホーム</button>
   <button id="tabFilter"><span class="ic">🔍</span>絞り込み<span id="filterBadge" hidden style="font-size:10px;vertical-align:super;color:var(--accent)">●</span></button>
-  <button id="tabExport"><span class="ic">⤓</span>書き出し</button>
   <button id="tabSettings"><span class="ic">⚙</span>設定</button>
 </nav>
 
@@ -874,7 +873,6 @@ function wire(){
   document.getElementById("tabFilter").onclick=openFilter;
   document.getElementById("filterClear").onclick=clearFilter;
   document.getElementById("filterApply").onclick=applyFilter;
-  document.getElementById("tabExport").onclick=exportJSON;
   document.getElementById("tabSettings").onclick=openSettings;
   document.getElementById("setClose").onclick=()=>closeScrim("setScrim");
 
