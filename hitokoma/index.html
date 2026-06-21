@@ -41,15 +41,10 @@
   :focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:6px}
 
   /* ===== ヘッダ ===== */
-  header{display:flex; align-items:flex-end; justify-content:space-between; gap:12px; margin:6px 0 4px}
-  .date-nav{display:flex; align-items:center; gap:6px}
+  header{display:flex; align-items:center; justify-content:center; gap:12px; margin:10px 0 4px}
+  .app-title{font-family:var(--serif); font-size:21px; letter-spacing:.06em; color:var(--ink)}
   .nav-btn{background:none; border:none; font-size:22px; color:var(--muted); width:38px; height:38px; border-radius:50%; display:grid; place-items:center}
   .nav-btn:hover{background:var(--surface-2); color:var(--ink)}
-  .date-main{text-align:center; min-width:150px}
-  .date-big{font-family:var(--serif); font-size:23px; letter-spacing:.02em; cursor:pointer}
-  .date-sub{font-size:12.5px; color:var(--muted); margin-top:2px}
-  .today-pill{font-size:11px; color:var(--accent-ink); background:var(--accent-soft); border:none; padding:5px 11px; border-radius:999px; font-weight:600}
-  .today-pill[hidden]{display:none}
 
   /* ===== バックアップ催促 ===== */
   .reminder{display:flex; align-items:center; gap:10px; background:var(--surface); border:1px solid var(--line);
@@ -95,11 +90,21 @@
   .thread-head{display:flex; align-items:baseline; gap:8px; margin:22px 4px 6px}
   .thread-head h2{font-family:var(--serif); font-size:16px; font-weight:500; margin:0}
   .thread-head .count{font-size:12.5px; color:var(--muted)}
+  /* その日ビューのヘッダ（戻る‹ ＋ 見出し） */
+  #dayView .thread-head{align-items:center}
+  #dayView .nav-btn{margin-left:-8px}
+
+  /* ===== 紡いだ糸フィード ===== */
+  .date-divider{display:flex; align-items:center; gap:10px; margin:18px 4px 4px; color:var(--muted); font-size:12.5px}
+  .date-divider::before,.date-divider::after{content:""; flex:1; height:1px; background:var(--line)}
+  .date-divider span{font-family:var(--serif); letter-spacing:.02em}
+  .more-btn{margin:14px 0 4px; width:100%}
+  .more-btn[hidden]{display:none}
   .thread{position:relative; margin-left:6px; padding-left:22px}
-  .thread::before{content:""; position:absolute; left:5px; top:8px; bottom:8px; width:2px; background:var(--line)}
+  .thread::before{content:""; position:absolute; left:4.5px; top:8px; bottom:8px; width:2px; background:var(--line)}
   .node{position:relative; padding:11px 0}
   .node::before{content:""; position:absolute; left:-22px; top:18px; width:11px; height:11px; border-radius:50%;
-    background:var(--surface); border:2.5px solid var(--accent)}
+    background:var(--surface); border:2.5px solid var(--accent); z-index:1}
   .node-card{display:flex; gap:11px; align-items:flex-start; background:var(--surface); border:1px solid var(--line);
     border-radius:var(--radius-sm); padding:10px 12px; box-shadow:var(--shadow); width:100%; text-align:left}
   .node-card:hover{border-color:var(--accent)}
@@ -176,15 +181,7 @@
 <body>
 <div class="wrap">
   <header>
-    <div class="date-nav">
-      <button class="nav-btn" id="prevDay" aria-label="前の日">‹</button>
-      <div class="date-main">
-        <div class="date-big" id="dateBig" role="button" tabindex="0" title="日付を選ぶ">—</div>
-        <div class="date-sub" id="dateSub"></div>
-      </div>
-      <button class="nav-btn" id="nextDay" aria-label="次の日">›</button>
-    </div>
-    <button class="today-pill" id="todayBtn" hidden>今日へ</button>
+    <div class="app-title">ひとこま</div>
   </header>
 
   <div id="reminderSlot"></div>
@@ -211,11 +208,25 @@
     </button>
   </section>
 
-  <div class="thread-head">
-    <h2>きょうの糸</h2>
-    <span class="count" id="threadCount"></span>
-  </div>
-  <div id="threadSlot"></div>
+  <!-- ホーム：紡いだ糸（全日付横断フィード） -->
+  <section id="feedView">
+    <div class="thread-head">
+      <h2>紡いだ糸</h2>
+      <span class="count" id="feedCount"></span>
+    </div>
+    <div id="feedSlot"></div>
+    <button class="btn btn-ghost more-btn" id="moreBtn" hidden>もっと見る</button>
+  </section>
+
+  <!-- その日ビュー（カレンダーで日をタップしたとき。既定は非表示） -->
+  <section id="dayView" hidden>
+    <div class="thread-head">
+      <button class="nav-btn" id="dayBack" aria-label="ホームへ戻る">‹</button>
+      <h2 id="dayTitle">きょうの糸</h2>
+      <span class="count" id="threadCount"></span>
+    </div>
+    <div id="threadSlot"></div>
+  </section>
 </div>
 
 <nav class="tabbar">
@@ -369,6 +380,11 @@ const S={ viewDate:new Date(), palette:[], genres:[], theme:"auto", reminderDays
 let editingId=null, editPickSel=null;
 // 記録の選択状態（パレット項目 id の集合）。記録ボタン押下で1件に確定する。
 const selected=new Set();
+// 画面モード："feed"=紡いだ糸（全日横断ホーム） / "day"=その日ビュー
+let viewMode="feed";
+// フィードのページング（初期10件、もっと見るで +10）
+const FEED_PAGE=10;
+let feedLimit=FEED_PAGE;
 
 // ---------- 日付ユーティリティ ----------
 const pad=n=>String(n).padStart(2,"0");
@@ -377,6 +393,14 @@ function dayStart(d){const x=new Date(d);x.setHours(0,0,0,0);return x.getTime();
 function dayEnd(d){return dayStart(d)+86400000;}
 function isSameDay(a,b){return dayStart(a)===dayStart(b);}
 function fmtDateBig(d){return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`;}
+// フィードの日付ディバイダ用（曜日つき）。今日/昨日は前置きで分かりやすく。
+function fmtDateDivider(ms){
+  const d=new Date(ms), now=new Date();
+  let pre="";
+  if(isSameDay(d,now)) pre="今日 · ";
+  else if(isSameDay(d,new Date(dayStart(now)-86400000))) pre="昨日 · ";
+  return `${pre}${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${WD[d.getDay()]}）`;
+}
 function fmtTime(ms){const d=new Date(ms);return `${pad(d.getHours())}:${pad(d.getMinutes())}`;}
 function localInputValue(ms){const d=new Date(ms);return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;}
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
@@ -398,10 +422,7 @@ function toast(msg){
 
 // ---------- レンダリング ----------
 function renderHeader(){
-  const d=S.viewDate;
-  document.getElementById("dateBig").textContent=fmtDateBig(d);
-  document.getElementById("dateSub").textContent=`${WD[d.getDay()]}曜日`+(isSameDay(d,new Date())?" · 今日":"");
-  document.getElementById("todayBtn").hidden=isSameDay(d,new Date());
+  // 5-3以降ヘッダは固定タイトルのみ。その日ビューの日付は showDay() が dayTitle に書く。
 }
 function renderPalette(){
   const p=document.getElementById("palette"); p.innerHTML="";
@@ -432,31 +453,65 @@ function updateCommitBtn(){
   btn.disabled=n===0;
   if(n>1){ cnt.hidden=false; cnt.textContent=String(n); } else { cnt.hidden=true; }
 }
+// 1件分のカードノード（糸の点）。フィード・その日ビュー共通。
+function makeEntryNode(e){
+  const node=document.createElement("div"); node.className="node";
+  const card=document.createElement("button"); card.className="node-card";
+  const icons=e.icons||[];
+  const emos=icons.map(ic=>`<span class="node-emo">${ic.emo}</span>`).join("");
+  const label=icons.map(ic=>ic.lbl).filter(Boolean).join("・");
+  card.innerHTML=`<span class="node-emos">${emos}</span>
+    <span class="node-body">
+      <span class="node-top"><span class="node-label">${escapeHtml(label)}</span><span class="node-time">${fmtTime(e.ts)}</span></span>
+      ${e.note?`<span class="node-note">${escapeHtml(e.note)}</span>`:""}
+    </span>`;
+  card.addEventListener("click",()=>openEditor(e));
+  node.appendChild(card);
+  return node;
+}
+
+// ホーム：紡いだ糸（全日付横断・新しい順・初期10件＋もっと見る）
+async function renderFeed(){
+  const slot=document.getElementById("feedSlot");
+  let list=await Store.allEntries();
+  list.sort((a,b)=>b.ts-a.ts); // 新しい順
+  const total=list.length;
+  document.getElementById("feedCount").textContent=total?`${total}件の記録`:"";
+  if(!total){
+    slot.innerHTML=`<div class="empty"><span class="e">𓂃</span>まだ記録がありません。<br>上のアイコンを選んで「記録」を押すと、ここに連なります。</div>`;
+    document.getElementById("moreBtn").hidden=true;
+    return;
+  }
+  const shown=list.slice(0,feedLimit);
+  const thread=document.createElement("div"); thread.className="thread";
+  let lastDay=null;
+  shown.forEach(e=>{
+    const dayKey=dayStart(e.ts);
+    if(dayKey!==lastDay){
+      const div=document.createElement("div"); div.className="date-divider";
+      div.innerHTML=`<span>${escapeHtml(fmtDateDivider(e.ts))}</span>`;
+      thread.appendChild(div);
+      lastDay=dayKey;
+    }
+    thread.appendChild(makeEntryNode(e));
+  });
+  slot.innerHTML=""; slot.appendChild(thread);
+  document.getElementById("moreBtn").hidden = feedLimit>=total;
+}
+
+// その日ビュー（カレンダーで日タップ時。追記・編集の場）
 async function renderThread(){
   const slot=document.getElementById("threadSlot");
   const start=dayStart(S.viewDate), end=dayEnd(S.viewDate);
   let list=await Store.entriesInRange(start,end);
   list.sort((a,b)=>a.ts-b.ts);
-  document.getElementById("threadCount").textContent=list.length?`${list.length}つの記録`:"";
+  document.getElementById("threadCount").textContent=list.length?`${list.length}件の記録`:"";
   if(!list.length){
-    slot.innerHTML=`<div class="empty"><span class="e">𓂃</span>まだ記録がありません。<br>上のアイコンを押して、いまの一こまを。</div>`;
+    slot.innerHTML=`<div class="empty"><span class="e">𓂃</span>この日の記録はまだありません。<br>上のアイコンを選んで「記録」を押すと、この日に残ります。</div>`;
     return;
   }
   const thread=document.createElement("div"); thread.className="thread";
-  list.forEach(e=>{
-    const node=document.createElement("div"); node.className="node";
-    const card=document.createElement("button"); card.className="node-card";
-    const icons=e.icons||[];
-    const emos=icons.map(ic=>`<span class="node-emo">${ic.emo}</span>`).join("");
-    const label=icons.map(ic=>ic.lbl).filter(Boolean).join("・");
-    card.innerHTML=`<span class="node-emos">${emos}</span>
-      <span class="node-body">
-        <span class="node-top"><span class="node-label">${escapeHtml(label)}</span><span class="node-time">${fmtTime(e.ts)}</span></span>
-        ${e.note?`<span class="node-note">${escapeHtml(e.note)}</span>`:""}
-      </span>`;
-    card.addEventListener("click",()=>openEditor(e));
-    node.appendChild(card); thread.appendChild(node);
-  });
+  list.forEach(e=>thread.appendChild(makeEntryNode(e)));
   slot.innerHTML=""; slot.appendChild(thread);
 }
 function escapeHtml(s){return (s||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
@@ -485,8 +540,16 @@ async function commitEntry(){
   // 選択と詳細設定をクリア
   selected.clear();
   renderPalette(); updateCommitBtn(); resetDetails();
+  // 新規記録は先頭に来る。フィードは先頭を見せたいので表示数を初期に戻す。
+  feedLimit=FEED_PAGE;
   toast(`記録しました · ${fmtTime(ts)}`);
-  renderThread();
+  await refreshViews();
+}
+
+// 表示中のビューを最新化（フィードは常に、その日ビューは開いていれば）
+async function refreshViews(){
+  await renderFeed();
+  if(viewMode==="day") await renderThread();
 }
 
 // ---------- 編集シート ----------
@@ -519,13 +582,13 @@ async function saveEdit(){
   const ts=tval?new Date(tval).getTime():Date.now();
   await Store.putEntry({id:editingId,ts,icons:[{emo,lbl,genre}],note});
   closeScrim("editScrim"); toast("更新しました");
-  renderThread();
+  await refreshViews();
 }
 function matchLabel(emo){const f=S.palette.find(p=>p.emo===emo);return f?f.lbl:"記録";}
 function matchGenre(emo){const f=S.palette.find(p=>p.emo===emo);return f?(f.genre??null):null;}
 async function deleteEdit(){
   if(!confirm("この記録を削除しますか？")) return;
-  await Store.deleteEntry(editingId); closeScrim("editScrim"); toast("削除しました"); renderThread();
+  await Store.deleteEntry(editingId); closeScrim("editScrim"); toast("削除しました"); await refreshViews();
 }
 
 // ---------- 設定: パレット編集 ----------
@@ -612,7 +675,8 @@ async function doImport(file){
     await Store.setMeta("palette",S.palette);
   }
   toast(`${n}件を取り込みました`);
-  renderPalette(); renderThread(); if(document.getElementById("setScrim").classList.contains("open")) renderPalEdit();
+  feedLimit=FEED_PAGE;
+  renderPalette(); await refreshViews(); if(document.getElementById("setScrim").classList.contains("open")) renderPalEdit();
 }
 
 // ---------- 永続化 ----------
@@ -642,14 +706,14 @@ function openSettings(){
 
 // ---------- イベント結線 ----------
 function wire(){
-  document.getElementById("prevDay").onclick=()=>{S.viewDate=new Date(dayStart(S.viewDate)-86400000); refreshDay();};
-  document.getElementById("nextDay").onclick=()=>{S.viewDate=new Date(dayStart(S.viewDate)+86400000); refreshDay();};
-  document.getElementById("todayBtn").onclick=()=>{S.viewDate=new Date(); refreshDay();};
-  document.getElementById("tabToday").onclick=()=>{S.viewDate=new Date(); refreshDay(); window.scrollTo({top:0,behavior:"smooth"});};
-  const dateBig=document.getElementById("dateBig");
-  dateBig.onclick=pickDate; dateBig.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();pickDate();}};
-
   document.getElementById("commitBtn").onclick=commitEntry;
+
+  // フィード：もっと見る（+10）／その日ビュー：ホームへ戻る
+  document.getElementById("moreBtn").onclick=async()=>{ feedLimit+=FEED_PAGE; await renderFeed(); };
+  document.getElementById("dayBack").onclick=()=>showFeed();
+
+  // ホームタブ
+  document.getElementById("tabToday").onclick=()=>{ showFeed(); window.scrollTo({top:0,behavior:"smooth"}); };
 
   document.getElementById("tabExport").onclick=exportJSON;
   document.getElementById("tabSettings").onclick=openSettings;
@@ -674,20 +738,25 @@ function wire(){
     document.querySelectorAll("#themeSeg button").forEach(x=>x.classList.toggle("on",x===b));
   });
 }
-function pickDate(){
-  const inp=document.createElement("input"); inp.type="date";
-  inp.value=localInputValue(dayStart(S.viewDate)).slice(0,10);
-  inp.style.position="fixed"; inp.style.opacity="0"; inp.style.left="-9999px";
-  document.body.appendChild(inp);
-  inp.onchange=()=>{ if(inp.value){ const [y,m,d]=inp.value.split("-").map(Number); S.viewDate=new Date(y,m-1,d); refreshDay(); } inp.remove(); };
-  inp.addEventListener("blur",()=>inp.remove(),{once:true});
-  inp.showPicker? inp.showPicker() : inp.click();
+// ---------- ビュー切替 ----------
+function showFeed(){
+  viewMode="feed";
+  document.getElementById("feedView").hidden=false;
+  document.getElementById("dayView").hidden=true;
 }
-function refreshDay(){
-  renderHeader(); renderThread();
-  // 詳細設定が未操作（閉じている）うちは、日時既定を表示中の日に追従させる
+// カレンダー等から日付を指定してその日ビューを開く（5-4 が呼ぶ想定）
+async function showDay(date){
+  S.viewDate=date||new Date();
+  viewMode="day";
+  document.getElementById("feedView").hidden=true;
+  document.getElementById("dayView").hidden=false;
+  // 見出しに日付を表示
+  const d=S.viewDate;
+  document.getElementById("dayTitle").textContent=fmtDateBig(d);
+  // 詳細設定の日時既定をその日の正午に合わせる（閉じているときのみ）
   const box=document.getElementById("detailsBox");
   if(box&&!box.open){ document.getElementById("detailTime").value=localInputValue(defaultLogTs()); }
+  await renderThread();
 }
 
 // ---------- マイグレーション（meta.schema で冪等化） ----------
@@ -719,13 +788,14 @@ async function boot(){
   S.reminderDays=await Store.getMeta("reminderDays",7);
   S.lastBackup=await Store.getMeta("lastBackup",null);
   applyTheme(); wire();
-  renderHeader(); renderPalette(); updateCommitBtn(); resetDetails(); await renderThread(); renderReminder();
+  renderPalette(); updateCommitBtn(); resetDetails();
+  showFeed(); await renderFeed(); renderReminder();
   // 初回は静かに永続化を依頼
   if(navigator.storage&&navigator.storage.persist){ try{ await navigator.storage.persist(); }catch(_){} }
   if("serviceWorker" in navigator){ try{ await navigator.serviceWorker.register("sw.js"); }catch(_){} }
 }
 boot().catch(err=>{
-  document.getElementById("threadSlot").innerHTML=
+  document.getElementById("feedSlot").innerHTML=
     `<div class="empty">起動できませんでした。<br>このブラウザはプライベートモードか、保存機能が制限されているかもしれません。</div>`;
   console.error(err);
 });
