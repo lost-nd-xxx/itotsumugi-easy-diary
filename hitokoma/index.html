@@ -126,7 +126,7 @@
   .empty .e{font-size:30px; display:block; margin-bottom:8px; opacity:.7}
 
   /* ===== 下部バー ===== */
-  .tabbar{position:fixed; left:0; right:0; bottom:0; background:color-mix(in srgb,var(--paper) 88%,transparent);
+  .tabbar{position:fixed; left:0; right:0; bottom:0; z-index:20; background:color-mix(in srgb,var(--paper) 88%,transparent);
     backdrop-filter:saturate(1.4) blur(10px); border-top:1px solid var(--line);
     padding:8px 12px calc(8px + env(safe-area-inset-bottom)); display:flex; gap:8px; justify-content:center}
   .tabbar button{flex:1; max-width:170px; background:none; border:none; color:var(--muted); font-size:12px;
@@ -152,7 +152,10 @@
   .btn-primary{background:var(--accent); color:#fff}
   [data-theme="dark"] .btn-primary{color:#16201a}
   .btn-ghost{background:var(--surface-2); color:var(--ink)}
-  .btn-danger{background:none; color:var(--danger); border:1px solid var(--line)}
+  .btn-danger{background:none; color:var(--danger); border:1px solid var(--danger)}
+  #confirmScrim{z-index:35}
+  .confirm-sheet{max-height:unset; padding:24px 20px 20px}
+  .confirm-msg{font-size:15px; margin:0 0 20px; text-align:center; line-height:1.6}
   .actions{display:flex; gap:10px; margin-top:6px}
 
   /* 設定: パレット編集 */
@@ -303,7 +306,6 @@
     <div class="field">
       <label>アイコン</label>
       <div class="pick-grid" id="editPicks"></div>
-      <input id="editEmoji" type="text" placeholder="自由入力（絵文字）" maxlength="8" />
     </div>
     <div class="field"><label>時刻</label><input id="editTime" type="datetime-local" /></div>
     <div class="field"><label>メモ</label><textarea id="editNote" placeholder="（任意）"></textarea></div>
@@ -323,6 +325,17 @@
     <div class="actions" style="margin-top:16px">
       <button class="btn btn-ghost" id="filterClear">クリア</button>
       <button class="btn btn-primary" id="filterApply">適用</button>
+    </div>
+  </div>
+</div>
+
+<!-- 確認ダイアログ -->
+<div class="scrim" id="confirmScrim">
+  <div class="sheet confirm-sheet" role="dialog" aria-modal="true">
+    <p id="confirmMsg" class="confirm-msg"></p>
+    <div class="actions">
+      <button class="btn btn-ghost" id="confirmCancel">キャンセル</button>
+      <button class="btn btn-danger" id="confirmOk">削除</button>
     </div>
   </div>
 </div>
@@ -450,7 +463,8 @@ const DEFAULT_PALETTE=[
 
 // ---------- 状態 ----------
 const S={ viewDate:new Date(), palette:[], genres:[], theme:"auto", reminderDays:7, lastBackup:null, dismissReminder:false, weekStart:0, calDate:new Date() };
-let editingId=null, editPickSel=null;
+let editingId=null;
+const editSelected=new Set(); // 編集シートで選択中のパレット item.id
 // 記録の選択状態（パレット項目 id の集合）。記録ボタン押下で1件に確定する。
 const selected=new Set();
 // 画面モード："feed"=紡いだ糸（全日横断ホーム） / "day"=その日ビュー / "cal"=カレンダー
@@ -661,40 +675,48 @@ async function refreshViews(){
 
 // ---------- 編集シート ----------
 function openEditor(e){
-  editingId=e.id; editPickSel=null;
-  // 5-1 追従の暫定編集：先頭アイコンを対象にする（複数アイコン編集 UI は 5-2 以降）
-  const first=(e.icons&&e.icons[0])||{emo:"",lbl:"",genre:null};
-  document.getElementById("editEmoji").value=first.emo;
+  editingId=e.id;
+  editSelected.clear();
+  // 記録済みアイコンのうちパレットに存在するものを選択状態に復元
+  const existingEmos=new Set((e.icons||[]).map(ic=>ic.emo));
+  S.palette.forEach(it=>{ if(existingEmos.has(it.emo)) editSelected.add(it.id); });
   document.getElementById("editTime").value=localInputValue(e.ts);
   document.getElementById("editNote").value=e.note||"";
-  // パレットから選び直し
+  renderEditPicks();
+  openScrim("editScrim");
+}
+function renderEditPicks(){
   const g=document.getElementById("editPicks"); g.innerHTML="";
   S.palette.forEach(it=>{
-    const b=document.createElement("button"); b.className="pick"+((it.emo===first.emo)?" sel":"");
-    b.innerHTML=`<span class="emo">${it.emo}</span><span class="lbl">${it.lbl}</span>`;
+    const on=editSelected.has(it.id);
+    const b=document.createElement("button");
+    b.className="pick"+(on?" sel":"");
+    b.setAttribute("aria-pressed", on?"true":"false");
+    b.innerHTML=`<span class="check">✓</span><span class="emo">${it.emo}</span><span class="lbl">${it.lbl}</span>`;
     b.addEventListener("click",()=>{
-      g.querySelectorAll(".pick").forEach(x=>x.classList.remove("sel"));
-      b.classList.add("sel"); editPickSel=it; document.getElementById("editEmoji").value=it.emo;
+      if(editSelected.has(it.id)) editSelected.delete(it.id); else editSelected.add(it.id);
+      b.classList.toggle("sel", editSelected.has(it.id));
+      b.setAttribute("aria-pressed", editSelected.has(it.id)?"true":"false");
     });
     g.appendChild(b);
   });
-  openScrim("editScrim");
 }
 async function saveEdit(){
-  const emo=document.getElementById("editEmoji").value.trim()|| (editPickSel?editPickSel.emo:"")||"·";
-  const lbl=editPickSel?editPickSel.lbl:(matchLabel(emo));
-  const genre=editPickSel?(editPickSel.genre??null):matchGenre(emo);
+  const icons=S.palette
+    .filter(it=>editSelected.has(it.id))
+    .map(it=>({emo:it.emo, lbl:it.lbl, genre:it.genre??null}));
+  if(!icons.length){ toast("アイコンを1つ以上選んでください"); return; }
   const tval=document.getElementById("editTime").value;
   const note=document.getElementById("editNote").value.trim();
   const ts=tval?new Date(tval).getTime():Date.now();
-  await Store.putEntry({id:editingId,ts,icons:[{emo,lbl,genre}],note});
+  await Store.putEntry({id:editingId,ts,icons,note});
   closeScrim("editScrim"); toast("更新しました");
   await refreshViews();
 }
 function matchLabel(emo){const f=S.palette.find(p=>p.emo===emo);return f?f.lbl:"記録";}
 function matchGenre(emo){const f=S.palette.find(p=>p.emo===emo);return f?(f.genre??null):null;}
 async function deleteEdit(){
-  if(!confirm("この記録を削除しますか？")) return;
+  if(!await showConfirm("この記録を削除しますか？")) return;
   await Store.deleteEntry(editingId); closeScrim("editScrim"); toast("削除しました"); await refreshViews();
 }
 
@@ -759,9 +781,10 @@ async function exportJSON(){
 }
 function pickImport(){ document.getElementById("importFile").click(); }
 async function doImport(file){
-  let data; try{ data=JSON.parse(await file.text()); }catch(e){ alert("読み込めませんでした（JSON 形式ではないようです）。"); return; }
-  if(!data||!Array.isArray(data.entries)){ alert("このファイルには記録が見つかりませんでした。"); return; }
-  const mode=confirm("OK：既存に追加して取り込みます。\nキャンセル：全て置き換えます（現在のデータは消えます）。")?"merge":"replace";
+  let data; try{ data=JSON.parse(await file.text()); }catch(e){ toast("読み込めませんでした（JSON形式ではないようです）"); return; }
+  if(!data||!Array.isArray(data.entries)){ toast("このファイルには記録が見つかりませんでした"); return; }
+  const merge=await showConfirm("既存データをどうしますか？","追加して取り込む","全て置き換える");
+  const mode=merge?"merge":"replace";
   if(mode==="replace") await Store.clearEntries();
   let existing=new Set((await Store.allEntries()).map(e=>e.id));
   let n=0;
@@ -794,7 +817,7 @@ async function refreshPersist(){
   el.textContent=p?"✓ 永続化済み：ブラウザに自動削除されにくい状態です。":"未永続化：ストレージ逼迫時に消える可能性があります。下のボタンで依頼できます。";
 }
 async function requestPersist(){
-  if(!navigator.storage||!navigator.storage.persist){ alert("この端末は永続化に対応していません。"); return; }
+  if(!navigator.storage||!navigator.storage.persist){ toast("この端末は永続化に対応していません"); return; }
   const ok=await navigator.storage.persist();
   toast(ok?"永続化を有効にしました":"許可されませんでした"); refreshPersist();
 }
@@ -803,6 +826,29 @@ async function requestPersist(){
 function openScrim(id){document.getElementById(id).classList.add("open");}
 function closeScrim(id){document.getElementById(id).classList.remove("open");}
 document.querySelectorAll(".scrim").forEach(s=>s.addEventListener("click",e=>{if(e.target===s) s.classList.remove("open");}));
+
+// アプリ内確認ダイアログ（confirm()の代替）
+// okLabel/cancelLabel を省略すると「削除」「キャンセル」
+function showConfirm(msg, okLabel="削除", cancelLabel="キャンセル"){
+  return new Promise(resolve=>{
+    document.getElementById("confirmMsg").textContent=msg;
+    const ok=document.getElementById("confirmOk");
+    const cancel=document.getElementById("confirmCancel");
+    ok.textContent=okLabel;
+    cancel.textContent=cancelLabel;
+    openScrim("confirmScrim");
+    const done=(result)=>{
+      closeScrim("confirmScrim");
+      ok.removeEventListener("click",onOk);
+      cancel.removeEventListener("click",onCancel);
+      resolve(result);
+    };
+    const onOk=()=>done(true);
+    const onCancel=()=>done(false);
+    ok.addEventListener("click",onOk);
+    cancel.addEventListener("click",onCancel);
+  });
+}
 
 // ---------- 設定シートを開く ----------
 function openSettings(){
