@@ -59,7 +59,7 @@
 
   /* ===== 記録パレット ===== */
   .panel{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:14px; box-shadow:var(--shadow); margin:14px 0}
-  .palette{display:grid; grid-template-columns:repeat(auto-fill,minmax(64px,1fr)); gap:9px}
+  .palette{display:flex; flex-direction:column; gap:0}
   .chip{background:var(--paper); border:1px solid var(--line); border-radius:var(--radius-sm); padding:10px 4px 7px;
     display:flex; flex-direction:column; align-items:center; gap:3px; transition:transform .12s ease, background .15s}
   .chip:active{transform:scale(.93)}
@@ -71,8 +71,18 @@
   .chip{position:relative}
   .chip.sel .check{opacity:1}
 
+  /* ===== パレット ジャンルアコーディオン ===== */
+  .genre-details{margin-bottom:6px; border:1px solid var(--line); border-radius:var(--radius-sm); background:var(--paper)}
+  .genre-details > summary{list-style:none; cursor:pointer; padding:10px 13px; font-size:13px; color:var(--muted);
+    display:flex; align-items:center; gap:7px; font-weight:600; letter-spacing:.03em}
+  .genre-details > summary::-webkit-details-marker{display:none}
+  .genre-details > summary::before{content:"＋"; font-size:13px; color:var(--accent); width:14px; text-align:center}
+  .genre-details[open] > summary::before{content:"−"}
+  .genre-details[open] > summary{color:var(--ink); border-bottom:1px solid var(--line)}
+  .genre-chips{display:grid; grid-template-columns:repeat(auto-fill,minmax(64px,1fr)); gap:9px; padding:10px}
+
   /* ===== 詳細設定（折りたたみ） ===== */
-  .details{margin:12px 0 4px; border:1px solid var(--line); border-radius:var(--radius-sm); background:var(--paper)}
+  .details{margin:0 0 4px; border:1px solid var(--line); border-radius:var(--radius-sm); background:var(--paper)}
   .details > summary{list-style:none; cursor:pointer; padding:11px 13px; font-size:13.5px; color:var(--muted); display:flex; align-items:center; gap:7px}
   .details > summary::-webkit-details-marker{display:none}
   .details > summary::before{content:"＋"; font-size:14px; color:var(--accent); width:14px; text-align:center}
@@ -242,7 +252,7 @@
     <div class="palette" id="palette"></div>
 
     <details class="details" id="detailsBox">
-      <summary>詳細設定（日時・メモ）</summary>
+      <summary>日時・メモ</summary>
       <div class="details-body">
         <div class="field">
           <label for="detailTime">日時</label>
@@ -461,7 +471,7 @@ const DEFAULT_PALETTE=[
 ].map(p=>({id:uid(),...p}));
 
 // ---------- 状態 ----------
-const S={ viewDate:new Date(), palette:[], genres:[], theme:"auto", reminderDays:7, lastBackup:null, dismissReminder:false, weekStart:0, calDate:new Date() };
+const S={ viewDate:new Date(), palette:[], genres:[], theme:"auto", reminderDays:7, lastBackup:null, dismissReminder:false, weekStart:0, calDate:new Date(), paletteOpen:{} };
 let editingId=null;
 const editSelected=new Set(); // 編集シートで選択中のパレット item.id
 // 記録の選択状態（パレット項目 id の集合）。記録ボタン押下で1件に確定する。
@@ -523,16 +533,47 @@ function renderHeader(){
 }
 function renderPalette(){
   const p=document.getElementById("palette"); p.innerHTML="";
-  S.palette.forEach((it)=>{
-    const on=selected.has(it.id);
-    const b=document.createElement("button");
-    b.className="chip"+(on?" sel":"");
-    b.setAttribute("aria-pressed",on?"true":"false");
-    b.setAttribute("aria-label",`選択：${it.lbl}`);
-    b.innerHTML=`<span class="check">✓</span><span class="emo">${it.emo}</span><span class="lbl">${it.lbl}</span>`;
-    b.addEventListener("click",()=>toggleSelect(it,b));
-    p.appendChild(b);
+  S.genres.forEach(g=>{
+    const items=S.palette.filter(it=>it.genre===g.key);
+    if(!items.length) return;
+    const isOpen=S.paletteOpen[g.key]===true;
+    const det=document.createElement("details"); det.className="genre-details";
+    if(isOpen) det.open=true;
+    const sum=document.createElement("summary"); sum.textContent=g.label;
+    const grid=document.createElement("div"); grid.className="genre-chips";
+    items.forEach(it=>{
+      const on=selected.has(it.id);
+      const b=document.createElement("button");
+      b.className="chip"+(on?" sel":"");
+      b.setAttribute("aria-pressed",on?"true":"false");
+      b.setAttribute("aria-label",`選択：${it.lbl}`);
+      b.innerHTML=`<span class="check">✓</span><span class="emo">${it.emo}</span><span class="lbl">${it.lbl}</span>`;
+      b.addEventListener("click",()=>toggleSelect(it,b));
+      grid.appendChild(b);
+    });
+    det.appendChild(sum); det.appendChild(grid);
+    det.addEventListener("toggle",async()=>{
+      S.paletteOpen[g.key]=det.open;
+      await Store.setMeta("paletteOpen",S.paletteOpen);
+    });
+    p.appendChild(det);
   });
+  // ジャンル未設定の項目はフラット表示
+  const ungrouped=S.palette.filter(it=>!it.genre);
+  if(ungrouped.length){
+    const grid=document.createElement("div"); grid.className="genre-chips";
+    ungrouped.forEach(it=>{
+      const on=selected.has(it.id);
+      const b=document.createElement("button");
+      b.className="chip"+(on?" sel":"");
+      b.setAttribute("aria-pressed",on?"true":"false");
+      b.setAttribute("aria-label",`選択：${it.lbl}`);
+      b.innerHTML=`<span class="check">✓</span><span class="emo">${it.emo}</span><span class="lbl">${it.lbl}</span>`;
+      b.addEventListener("click",()=>toggleSelect(it,b));
+      grid.appendChild(b);
+    });
+    p.appendChild(grid);
+  }
 }
 // パレット項目の選択/解除をトグル（複数・ジャンルまたぎ可）
 function toggleSelect(it,btnEl){
@@ -1135,6 +1176,12 @@ async function boot(){
   S.reminderDays=await Store.getMeta("reminderDays",7);
   S.lastBackup=await Store.getMeta("lastBackup",null);
   S.weekStart=await Store.getMeta("weekStart",0);
+  S.paletteOpen=await Store.getMeta("paletteOpen",null);
+  if(!S.paletteOpen){
+    // 初回：最初のジャンルだけ開く
+    S.paletteOpen={};
+    if(S.genres.length) S.paletteOpen[S.genres[0].key]=true;
+  }
   applyTheme(); wire();
   renderPalette(); updateCommitBtn(); resetDetails();
   showFeed(); await renderFeed(); renderReminder();
