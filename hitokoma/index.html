@@ -26,6 +26,9 @@
     --accent:#7fa890; --accent-soft:#2e3a33; --accent-ink:#a9cdb8;
     --danger:#c98a8a; --shadow:0 1px 2px rgba(0,0,0,.25),0 8px 24px rgba(0,0,0,.28);
   }
+  /* ダーク時は日時入力のカレンダーアイコン・ネイティブピッカーを白系に揃える */
+  [data-theme="dark"] input[type="datetime-local"],
+  [data-theme="dark"] input[type="date"]{ color-scheme:dark; }
   *{box-sizing:border-box}
   html,body{margin:0;padding:0}
   body{
@@ -56,20 +59,37 @@
   .reminder button{border:none; background:var(--accent); color:#fff; padding:7px 13px; border-radius:9px; font-size:13px; font-weight:600}
   [data-theme="dark"] .reminder button{color:#16201a}
   .reminder .x{background:none; color:var(--muted); padding:4px 8px; font-size:16px}
+  /* ダーク時、閉じる✕は「書き出す」ボタン向けの濃色指定を打ち消して白系に */
+  [data-theme="dark"] .reminder .x{color:var(--ink)}
 
   /* ===== 記録パレット ===== */
   .panel{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:14px; box-shadow:var(--shadow); margin:14px 0}
-  .note-row{display:flex; gap:8px; margin-bottom:12px}
-  .note-row input{flex:1; background:var(--paper); border:1px solid var(--line); border-radius:11px; padding:11px 13px; font-size:15px; color:var(--ink)}
-  .note-row input::placeholder{color:var(--muted)}
   .palette{display:grid; grid-template-columns:repeat(auto-fill,minmax(64px,1fr)); gap:9px}
   .chip{background:var(--paper); border:1px solid var(--line); border-radius:var(--radius-sm); padding:10px 4px 7px;
     display:flex; flex-direction:column; align-items:center; gap:3px; transition:transform .12s ease, background .15s}
   .chip:active{transform:scale(.93)}
   .chip .emo{font-size:25px; line-height:1}
   .chip .lbl{font-size:11px; color:var(--muted); max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-  .chip.pulse{animation:pulse .45s ease}
-  @keyframes pulse{0%{background:var(--paper)}35%{background:var(--accent-soft); transform:scale(1.04)}100%{background:var(--paper)}}
+  .chip.sel{background:var(--accent-soft); border-color:var(--accent)}
+  .chip.sel .lbl{color:var(--accent-ink)}
+  .chip .check{position:absolute; top:3px; right:4px; font-size:11px; color:var(--accent); opacity:0; transition:opacity .12s}
+  .chip{position:relative}
+  .chip.sel .check{opacity:1}
+
+  /* ===== 詳細設定（折りたたみ） ===== */
+  .details{margin:12px 0 4px; border:1px solid var(--line); border-radius:var(--radius-sm); background:var(--paper)}
+  .details > summary{list-style:none; cursor:pointer; padding:11px 13px; font-size:13.5px; color:var(--muted); display:flex; align-items:center; gap:7px}
+  .details > summary::-webkit-details-marker{display:none}
+  .details > summary::before{content:"＋"; font-size:14px; color:var(--accent); width:14px; text-align:center}
+  .details[open] > summary::before{content:"−"}
+  .details[open] > summary{color:var(--ink); border-bottom:1px solid var(--line)}
+  .details-body{padding:13px}
+
+  /* ===== 記録ボタン ===== */
+  .commit-btn{margin-top:12px; display:flex; align-items:center; justify-content:center; gap:8px}
+  .commit-btn:disabled{background:var(--surface-2); color:var(--muted); cursor:default}
+  .commit-count{background:rgba(255,255,255,.28); border-radius:999px; min-width:21px; padding:1px 7px; font-size:13px; font-variant-numeric:tabular-nums}
+  .commit-count[hidden]{display:none}
 
   /* ===== きょうの糸（タイムライン） ===== */
   .thread-head{display:flex; align-items:baseline; gap:8px; margin:22px 4px 6px}
@@ -170,10 +190,25 @@
   <div id="reminderSlot"></div>
 
   <section class="panel" aria-label="記録する">
-    <div class="note-row">
-      <input id="noteInput" type="text" placeholder="メモ（任意）— 書いてからアイコンを押すと一緒に残ります" />
-    </div>
     <div class="palette" id="palette"></div>
+
+    <details class="details" id="detailsBox">
+      <summary>詳細設定（日時・メモ）</summary>
+      <div class="details-body">
+        <div class="field">
+          <label for="detailTime">日時</label>
+          <input id="detailTime" type="datetime-local" />
+        </div>
+        <div class="field" style="margin-bottom:0">
+          <label for="detailNote">メモ</label>
+          <textarea id="detailNote" placeholder="（任意）"></textarea>
+        </div>
+      </div>
+    </details>
+
+    <button class="btn btn-primary commit-btn" id="commitBtn" disabled>
+      記録<span class="commit-count" id="commitCount" hidden></span>
+    </button>
   </section>
 
   <div class="thread-head">
@@ -332,6 +367,8 @@ const DEFAULT_PALETTE=[
 // ---------- 状態 ----------
 const S={ viewDate:new Date(), palette:[], genres:[], theme:"auto", reminderDays:7, lastBackup:null, dismissReminder:false };
 let editingId=null, editPickSel=null;
+// 記録の選択状態（パレット項目 id の集合）。記録ボタン押下で1件に確定する。
+const selected=new Set();
 
 // ---------- 日付ユーティリティ ----------
 const pad=n=>String(n).padStart(2,"0");
@@ -368,13 +405,32 @@ function renderHeader(){
 }
 function renderPalette(){
   const p=document.getElementById("palette"); p.innerHTML="";
-  S.palette.forEach((it,i)=>{
+  S.palette.forEach((it)=>{
+    const on=selected.has(it.id);
     const b=document.createElement("button");
-    b.className="chip"; b.setAttribute("aria-label",`記録：${it.lbl}`);
-    b.innerHTML=`<span class="emo">${it.emo}</span><span class="lbl">${it.lbl}</span>`;
-    b.addEventListener("click",()=>quickLog(it,b));
+    b.className="chip"+(on?" sel":"");
+    b.setAttribute("aria-pressed",on?"true":"false");
+    b.setAttribute("aria-label",`選択：${it.lbl}`);
+    b.innerHTML=`<span class="check">✓</span><span class="emo">${it.emo}</span><span class="lbl">${it.lbl}</span>`;
+    b.addEventListener("click",()=>toggleSelect(it,b));
     p.appendChild(b);
   });
+}
+// パレット項目の選択/解除をトグル（複数・ジャンルまたぎ可）
+function toggleSelect(it,btnEl){
+  if(selected.has(it.id)) selected.delete(it.id); else selected.add(it.id);
+  const on=selected.has(it.id);
+  btnEl.classList.toggle("sel",on);
+  btnEl.setAttribute("aria-pressed",on?"true":"false");
+  updateCommitBtn();
+}
+// 記録ボタンの活性/件数表示を更新
+function updateCommitBtn(){
+  const btn=document.getElementById("commitBtn");
+  const cnt=document.getElementById("commitCount");
+  const n=selected.size;
+  btn.disabled=n===0;
+  if(n>1){ cnt.hidden=false; cnt.textContent=String(n); } else { cnt.hidden=true; }
 }
 async function renderThread(){
   const slot=document.getElementById("threadSlot");
@@ -405,18 +461,30 @@ async function renderThread(){
 }
 function escapeHtml(s){return (s||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 
-// ---------- 記録 ----------
-async function quickLog(it,btnEl){
-  const noteEl=document.getElementById("noteInput");
-  const note=noteEl.value.trim();
-  // 今日を見ているときは現在時刻、過去日を見ているときはその日の正午に置く
-  let ts=Date.now();
-  if(!isSameDay(S.viewDate,new Date())){ const d=new Date(S.viewDate); d.setHours(12,0,0,0); ts=d.getTime(); }
-  // パレット項目を {emo,lbl,genre} のスナップショットで格納（後でパレットを変えても過去記録は不変）
-  const e={id:uid(),ts,icons:[{emo:it.emo,lbl:it.lbl,genre:it.genre??null}],note};
-  await Store.addEntry(e);
-  noteEl.value="";
-  if(btnEl){ btnEl.classList.remove("pulse"); void btnEl.offsetWidth; btnEl.classList.add("pulse"); }
+// ---------- 記録（選択 → 確定） ----------
+// 詳細設定の日時既定。カレンダー等から「その日に追加」する場合に正午でセットする受け口。
+function defaultLogTs(){
+  if(isSameDay(S.viewDate,new Date())) return Date.now();
+  const d=new Date(S.viewDate); d.setHours(12,0,0,0); return d.getTime();
+}
+// 詳細設定をリセット（日時=既定、メモ空、折りたたみは閉じる）
+function resetDetails(){
+  document.getElementById("detailTime").value=localInputValue(defaultLogTs());
+  document.getElementById("detailNote").value="";
+  document.getElementById("detailsBox").open=false;
+}
+async function commitEntry(){
+  if(selected.size===0) return;
+  // 選択順を保つため palette の並び順で拾う。{emo,lbl,genre} をスナップショット格納。
+  const icons=S.palette.filter(p=>selected.has(p.id))
+    .map(p=>({emo:p.emo,lbl:p.lbl,genre:p.genre??null}));
+  const tval=document.getElementById("detailTime").value;
+  const ts=tval?new Date(tval).getTime():defaultLogTs();
+  const note=document.getElementById("detailNote").value.trim();
+  await Store.addEntry({id:uid(),ts,icons,note});
+  // 選択と詳細設定をクリア
+  selected.clear();
+  renderPalette(); updateCommitBtn(); resetDetails();
   toast(`記録しました · ${fmtTime(ts)}`);
   renderThread();
 }
@@ -581,6 +649,8 @@ function wire(){
   const dateBig=document.getElementById("dateBig");
   dateBig.onclick=pickDate; dateBig.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();pickDate();}};
 
+  document.getElementById("commitBtn").onclick=commitEntry;
+
   document.getElementById("tabExport").onclick=exportJSON;
   document.getElementById("tabSettings").onclick=openSettings;
   document.getElementById("setClose").onclick=()=>closeScrim("setScrim");
@@ -613,7 +683,12 @@ function pickDate(){
   inp.addEventListener("blur",()=>inp.remove(),{once:true});
   inp.showPicker? inp.showPicker() : inp.click();
 }
-function refreshDay(){ renderHeader(); renderThread(); }
+function refreshDay(){
+  renderHeader(); renderThread();
+  // 詳細設定が未操作（閉じている）うちは、日時既定を表示中の日に追従させる
+  const box=document.getElementById("detailsBox");
+  if(box&&!box.open){ document.getElementById("detailTime").value=localInputValue(defaultLogTs()); }
+}
 
 // ---------- マイグレーション（meta.schema で冪等化） ----------
 // 既存ユーザーは存在しないため、過去形式（v1）からの変換ロジックは持たない。
@@ -644,7 +719,7 @@ async function boot(){
   S.reminderDays=await Store.getMeta("reminderDays",7);
   S.lastBackup=await Store.getMeta("lastBackup",null);
   applyTheme(); wire();
-  renderHeader(); renderPalette(); await renderThread(); renderReminder();
+  renderHeader(); renderPalette(); updateCommitBtn(); resetDetails(); await renderThread(); renderReminder();
   // 初回は静かに永続化を依頼
   if(navigator.storage&&navigator.storage.persist){ try{ await navigator.storage.persist(); }catch(_){} }
   if("serviceWorker" in navigator){ try{ await navigator.serviceWorker.register("sw.js"); }catch(_){} }
