@@ -197,7 +197,13 @@
 
   /* ===== カレンダー ===== */
   .cal-header{display:flex; align-items:center; justify-content:space-between; margin:18px 4px 10px}
-  .cal-month{font-family:var(--serif); font-size:18px; letter-spacing:.02em}
+  .cal-month{font-family:var(--serif); font-size:18px; letter-spacing:.02em; background:none; border:none; color:var(--ink); cursor:pointer; padding:4px 10px; border-radius:8px}
+  .cal-month:hover{background:var(--surface-2)}
+  .cal-picker-year{display:flex; align-items:center; justify-content:center; gap:16px; font-family:var(--serif); font-size:18px; margin-bottom:16px}
+  .cal-picker-months{display:grid; grid-template-columns:repeat(4,1fr); gap:8px}
+  .cal-picker-months button{background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:12px 4px; font-size:14px; color:var(--ink); cursor:pointer}
+  .cal-picker-months button:hover{background:var(--surface-2)}
+  .cal-picker-months button.current{background:var(--accent-soft); border-color:var(--accent); color:var(--accent-ink); font-weight:600}
   .cal-grid{display:grid; grid-template-columns:repeat(7,1fr); gap:0;
     border-left:1px solid var(--line); border-top:1px solid var(--line)}
   .cal-dow{text-align:center; font-size:11px; color:var(--muted); padding:5px 0;
@@ -209,7 +215,7 @@
   .cal-cell.other-month{opacity:.35}
   .cal-cell.filtered-out .cal-inner{opacity:.3}
   /* ハイライトはインナーに閉じて角丸と罫線を共存させる */
-  .cal-inner{min-height:48px; border-radius:var(--radius-sm); padding:4px 3px 3px;
+  .cal-inner{min-height:54px; border-radius:var(--radius-sm); padding:4px 3px 3px;
     display:flex; flex-direction:column; align-items:center; gap:2px; transition:background .12s}
   .cal-cell:hover .cal-inner{background:var(--surface-2)}
   .cal-cell.today .cal-inner{background:var(--accent-soft)}
@@ -218,7 +224,7 @@
   .cal-day.sun{color:var(--danger)}
   .cal-day.sat{color:var(--accent)}
   .cal-icons{display:flex; flex-wrap:wrap; justify-content:center; gap:1px; margin-top:1px}
-  .cal-ic{font-size:13px; line-height:1}
+  .cal-ic{font-size:16px; line-height:1}
 
   /* ===== 絞り込みシート ===== */
   .filter-genre-row{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px}
@@ -296,7 +302,7 @@
   <section id="calView" hidden>
     <div class="cal-header">
       <button class="nav-btn" id="calPrev" aria-label="前の月">‹</button>
-      <span class="cal-month" id="calMonth"></span>
+      <button class="cal-month" id="calMonth" aria-label="年月を選択"></button>
       <button class="nav-btn" id="calNext" aria-label="次の月">›</button>
     </div>
     <div class="cal-grid" id="calGrid"></div>
@@ -416,6 +422,24 @@
       <p class="hint">「ひとこま」— 一日のかけらを綴る記録帳。データはこの端末の中だけに保存されます（外部送信なし）。機種変更や消去に備えて、ときどき書き出しでバックアップを。</p>
     </div>
     </div><!-- /sheet-body -->
+  </div>
+</div>
+
+<!-- 年月ピッカー -->
+<div class="scrim" id="calPickerScrim">
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="年月を選択">
+    <div class="sheet-head">
+      <h3>年月を選択</h3>
+      <button class="btn btn-ghost" id="calPickerClose" aria-label="閉じる">✕</button>
+    </div>
+    <div class="sheet-body">
+      <div class="cal-picker-year">
+        <button class="nav-btn" id="calPickerYearPrev" aria-label="前の年">‹</button>
+        <span id="calPickerYear"></span>
+        <button class="nav-btn" id="calPickerYearNext" aria-label="次の年">›</button>
+      </div>
+      <div class="cal-picker-months" id="calPickerMonths"></div>
+    </div>
   </div>
 </div>
 
@@ -991,6 +1015,10 @@ function wire(){
   document.getElementById("tabCal").onclick=()=>{ showCal(); window.scrollTo({top:0,behavior:"smooth"}); };
   document.getElementById("calPrev").onclick=()=>{ S.calDate=new Date(S.calDate.getFullYear(),S.calDate.getMonth()-1,1); renderCal(); };
   document.getElementById("calNext").onclick=()=>{ S.calDate=new Date(S.calDate.getFullYear(),S.calDate.getMonth()+1,1); renderCal(); };
+  document.getElementById("calMonth").onclick=openCalPicker;
+  document.getElementById("calPickerClose").onclick=()=>closeScrim("calPickerScrim");
+  document.getElementById("calPickerYearPrev").onclick=()=>{ calPickerYear--; renderCalPicker(); };
+  document.getElementById("calPickerYearNext").onclick=()=>{ calPickerYear++; renderCalPicker(); };
 
   document.getElementById("tabFilter").onclick=openFilter;
   document.getElementById("filterClear").onclick=clearFilter;
@@ -1121,6 +1149,29 @@ async function showDay(date){
 }
 
 // カレンダービューを表示
+// ---------- カレンダー年月ピッカー ----------
+let calPickerYear=new Date().getFullYear();
+function openCalPicker(){
+  calPickerYear=S.calDate.getFullYear();
+  renderCalPicker();
+  openScrim("calPickerScrim");
+}
+function renderCalPicker(){
+  document.getElementById("calPickerYear").textContent=`${calPickerYear}年`;
+  const grid=document.getElementById("calPickerMonths"); grid.innerHTML="";
+  for(let m=0;m<12;m++){
+    const b=document.createElement("button");
+    b.textContent=`${m+1}月`;
+    if(calPickerYear===S.calDate.getFullYear()&&m===S.calDate.getMonth()) b.className="current";
+    b.addEventListener("click",()=>{
+      S.calDate=new Date(calPickerYear,m,1);
+      closeScrim("calPickerScrim");
+      renderCal();
+    });
+    grid.appendChild(b);
+  }
+}
+
 async function showCal(){
   viewMode="cal";
   document.getElementById("feedView").hidden=true;
