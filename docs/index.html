@@ -126,9 +126,9 @@
   .node-top{display:flex; align-items:baseline; gap:8px}
   .node-label{font-weight:600; font-size:14.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
   .node-time{font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap; margin-left:auto}
-  .node-note{font-size:14px; color:var(--ink); margin-top:2px; white-space:pre-wrap; word-break:break-word}
+  .node-note{font-size:14px; color:var(--ink); margin-top:2px; white-space:pre-wrap; word-break:break-word; display:block; text-align:left}
   /* 拡張カード（複数アイコン or メモあり） */
-  .node-card.expanded{flex-direction:column; gap:4px; min-width:0; width:0; flex:1}
+  .node-card.expanded{flex-direction:column; gap:4px; min-width:0; width:0; flex:1; align-items:stretch}
   .node-card.expanded .node-emos{flex-wrap:nowrap}
   .node-card.expanded .node-header{display:flex; align-items:center; gap:8px; width:100%}
   .node-card.expanded .node-label{font-size:14.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; width:100%}
