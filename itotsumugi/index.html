@@ -453,7 +453,7 @@
    ========================================================= */
 
 // ---------- IndexedDB ラッパ ----------
-const DB_NAME="hitokoma", DB_VER=1;
+const DB_NAME="itotsumugi", DB_VER=1;
 function openDB(){
   return new Promise((res,rej)=>{
     const r=indexedDB.open(DB_NAME,DB_VER);
@@ -933,13 +933,13 @@ function renderReminder(){
 // ---------- 書き出し / 読み込み ----------
 async function exportJSON(){
   const entries=await Store.allEntries();
-  const data={app:"hitokoma",version:2,exportedAt:new Date().toISOString(),
+  const data={app:"itotsumugi",version:2,exportedAt:new Date().toISOString(),
     settings:{theme:S.theme,reminderDays:S.reminderDays,weekStart:S.weekStart}, genres:S.genres, palette:S.palette, entries};
   const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
   const url=URL.createObjectURL(blob);
   const a=document.createElement("a");
   const d=new Date();
-  a.href=url; a.download=`hitokoma-${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}.json`;
+  a.href=url; a.download=`itotsumugi-${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}.json`;
   document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
   S.lastBackup=Date.now(); await Store.setMeta("lastBackup",S.lastBackup);
   S.dismissReminder=true; renderReminder(); toast("書き出しました");
