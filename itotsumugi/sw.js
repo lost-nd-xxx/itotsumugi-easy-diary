@@ -1,7 +1,7 @@
-/* ひとこま — service worker
+/* いとつむぎ — service worker
    アプリ本体をキャッシュしてオフラインでも起動できるようにする。
    アプリを更新したら CACHE の版番号を上げること。 */
-const CACHE = "hitokoma-v6";
+const CACHE = "itotsumugi-v1";
 const ASSETS = [
   "./",
   "./index.html",
