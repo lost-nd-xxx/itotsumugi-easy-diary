@@ -142,7 +142,8 @@
     padding:8px 12px calc(8px + env(safe-area-inset-bottom)); display:flex; gap:8px; justify-content:center}
   .tabbar button{flex:1; max-width:170px; background:none; border:none; color:var(--muted); font-size:12px;
     display:flex; flex-direction:column; align-items:center; gap:3px; padding:5px}
-  .tabbar button .ic{font-size:19px}
+  .tabbar button .ic{font-size:19px; position:relative; display:inline-block}
+  .tabbar button .ic.has-badge::after{content:""; position:absolute; top:1px; right:-1px; width:6px; height:6px; border-radius:50%; background:var(--accent); border:1.5px solid var(--paper)}
   .tabbar button:hover{color:var(--ink)}
 
   /* ===== モーダル ===== */
@@ -305,7 +306,7 @@
 <nav class="tabbar">
   <button id="tabCal"><span class="ic">📅</span>カレンダー</button>
   <button id="tabToday"><span class="ic">🧵</span>ホーム</button>
-  <button id="tabFilter"><span class="ic">🔍</span>絞り込み<span id="filterBadge" hidden style="font-size:10px;vertical-align:super;color:var(--accent)">●</span></button>
+  <button id="tabFilter"><span class="ic" id="filterBadge">🔍</span>絞り込み</button>
 </nav>
 
 <!-- 記録の編集シート -->
@@ -1083,7 +1084,7 @@ function clearFilter(){
 // フィード/カレンダー見出しの絞り込みバッジを更新
 function updateFilterBadge(){
   const tabBadge=document.getElementById("filterBadge");
-  if(tabBadge) tabBadge.hidden=!filterActive();
+  if(tabBadge) tabBadge.classList.toggle("has-badge", filterActive());
   ["feedView","calView"].forEach(id=>{
     const head=document.querySelector(`#${id} .thread-head, #${id} .cal-header`);
     if(!head) return;
@@ -1102,6 +1103,7 @@ function showFeed(){
   viewMode="feed";
   document.getElementById("feedView").hidden=false;
   document.getElementById("dayView").hidden=true;
+  document.getElementById("calView").hidden=true;
 }
 // カレンダー等から日付を指定してその日ビューを開く（5-4 が呼ぶ想定）
 async function showDay(date){
