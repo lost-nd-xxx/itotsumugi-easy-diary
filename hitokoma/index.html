@@ -325,7 +325,7 @@
     <div class="sheet-body">
       <div class="field">
         <label>アイコン</label>
-        <div class="pick-grid" id="editPicks"></div>
+        <div id="editPicks"></div>
       </div>
       <div class="field"><label>時刻</label><input id="editTime" type="datetime-local" /></div>
       <div class="field"><label>メモ</label><textarea id="editNote" placeholder="（任意）"></textarea></div>
@@ -795,8 +795,9 @@ function openEditor(e){
   openScrim("editScrim");
 }
 function renderEditPicks(){
-  const g=document.getElementById("editPicks"); g.innerHTML="";
-  S.palette.forEach(it=>{
+  const wrap=document.getElementById("editPicks"); wrap.innerHTML="";
+
+  function makeChip(it){
     const on=editSelected.has(it.id);
     const b=document.createElement("button");
     b.className="chip"+(on?" sel":"");
@@ -807,8 +808,29 @@ function renderEditPicks(){
       b.classList.toggle("sel", editSelected.has(it.id));
       b.setAttribute("aria-pressed", editSelected.has(it.id)?"true":"false");
     });
-    g.appendChild(b);
+    return b;
+  }
+
+  S.genres.forEach(g=>{
+    const items=S.palette.filter(it=>it.genre===g.key);
+    if(!items.length) return;
+    const det=document.createElement("details"); det.className="genre-details";
+    const hasSelected=items.some(it=>editSelected.has(it.id));
+    if(hasSelected) det.open=true;
+    const sum=document.createElement("summary"); sum.textContent=g.label;
+    det.appendChild(sum);
+    const grid=document.createElement("div"); grid.className="pick-grid"; grid.style.cssText="margin:8px 0 4px; padding:0 10px";
+    items.forEach(it=>grid.appendChild(makeChip(it)));
+    det.appendChild(grid);
+    wrap.appendChild(det);
   });
+
+  const ungrouped=S.palette.filter(it=>!it.genre);
+  if(ungrouped.length){
+    const grid=document.createElement("div"); grid.className="pick-grid"; grid.style.cssText="margin-top:8px";
+    ungrouped.forEach(it=>grid.appendChild(makeChip(it)));
+    wrap.appendChild(grid);
+  }
 }
 async function saveEdit(){
   const icons=S.palette
