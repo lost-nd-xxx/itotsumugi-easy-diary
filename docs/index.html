@@ -874,8 +874,8 @@ function renderPalEdit(){
     const [emo,lbl]=row.querySelectorAll("input");
     emo.addEventListener("input",()=>{S.palette[i].emo=emo.value;});
     lbl.addEventListener("input",()=>{S.palette[i].lbl=lbl.value;});
-    row.querySelector(".up").addEventListener("click",e=>{e.stopPropagation(); movePal(i,-1);});
-    row.querySelector(".dn").addEventListener("click",e=>{e.stopPropagation(); movePal(i,1);});
+    row.querySelector(".up").addEventListener("click",e=>{e.stopPropagation(); movePalInGenre(it.id,-1);});
+    row.querySelector(".dn").addEventListener("click",e=>{e.stopPropagation(); movePalInGenre(it.id,1);});
     row.querySelector(".del").addEventListener("click",e=>{e.stopPropagation(); S.palette.splice(i,1); savePalette();});
     return row;
   }
@@ -888,7 +888,7 @@ function renderPalEdit(){
     det.appendChild(sum);
     const inner=document.createElement("div"); inner.style.cssText="padding:6px 8px 8px; display:flex; flex-direction:column; gap:6px;";
     items.forEach(it=>{
-      const i=S.palette.indexOf(it);
+      const i=S.palette.findIndex(p=>p.id===it.id);
       inner.appendChild(makePalRow(it,i));
     });
     const addBtn=document.createElement("button"); addBtn.className="add-pal-genre";
@@ -905,7 +905,7 @@ function renderPalEdit(){
   if(ungrouped.length){
     const inner=document.createElement("div"); inner.style.cssText="display:flex; flex-direction:column; gap:6px; margin-top:6px;";
     ungrouped.forEach(it=>{
-      const i=S.palette.indexOf(it);
+      const i=S.palette.findIndex(p=>p.id===it.id);
       inner.appendChild(makePalRow(it,i));
     });
     box.appendChild(inner);
@@ -915,6 +915,16 @@ function escapeAttr(s){return (s||"").replace(/"/g,"&quot;");}
 function movePal(i,dir){
   const j=i+dir; if(j<0||j>=S.palette.length) return;
   [S.palette[i],S.palette[j]]=[S.palette[j],S.palette[i]]; savePalette();
+}
+function movePalInGenre(id,dir){
+  const it=S.palette.find(p=>p.id===id); if(!it) return;
+  const genre=it.genre??null;
+  const sameGenre=S.palette.map((p,i)=>({p,i})).filter(({p})=>(p.genre??null)===genre);
+  const pos=sameGenre.findIndex(({p})=>p.id===id);
+  const npos=pos+dir; if(npos<0||npos>=sameGenre.length) return;
+  const ai=sameGenre[pos].i, bi=sameGenre[npos].i;
+  [S.palette[ai],S.palette[bi]]=[S.palette[bi],S.palette[ai]];
+  savePalette();
 }
 async function savePalette(){
   S.palette=S.palette.filter(p=>(p.emo&&p.emo.trim()));
