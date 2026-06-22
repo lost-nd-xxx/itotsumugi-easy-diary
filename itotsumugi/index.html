@@ -417,6 +417,12 @@
       <button class="btn btn-danger" id="resetBtn" style="margin-top:6px">全データをリセット</button>
     </div>
 
+    <div class="sec" id="installSec">
+      <h4>ホーム画面に追加</h4>
+      <button class="btn btn-ghost" id="installBtn" hidden>ホーム画面に追加</button>
+      <p class="hint" id="installHint"></p>
+    </div>
+
     <div class="sec">
       <h4>このアプリについて</h4>
       <p class="hint">「いとつむぎ」— 一日のかけらを綴る記録帳。データはこの端末の中だけに保存されます（外部送信なし）。機種変更や消去に備えて、ときどき書き出しでバックアップを。</p>
@@ -521,6 +527,7 @@ const DEFAULT_PALETTE=[
 
 // ---------- 状態 ----------
 const S={ viewDate:new Date(), palette:[], genres:[], theme:"auto", reminderDays:7, lastBackup:null, dismissReminder:false, weekStart:0, calDate:new Date(), paletteOpen:{} };
+let deferredInstallPrompt=null;
 let editingId=null;
 const editSelected=new Set(); // 編集シートで選択中のパレット item.id
 // 記録の選択状態（パレット項目 id の集合）。記録ボタン押下で1件に確定する。
@@ -1071,6 +1078,12 @@ function wire(){
   document.getElementById("importFile").onchange=e=>{const f=e.target.files[0]; if(f) doImport(f); e.target.value="";};
   document.getElementById("persistBtn").onclick=requestPersist;
   document.getElementById("resetBtn").onclick=resetAll;
+  document.getElementById("installBtn").onclick=async()=>{
+    if(!deferredInstallPrompt) return;
+    deferredInstallPrompt.prompt();
+    const {outcome}=await deferredInstallPrompt.userChoice;
+    if(outcome==="accepted"){ deferredInstallPrompt=null; renderInstallSection(); }
+  };
 
   document.getElementById("reminderDays").onchange=async e=>{S.reminderDays=Number(e.target.value); await Store.setMeta("reminderDays",S.reminderDays); renderReminder();};
   document.querySelectorAll("#themeSeg button").forEach(b=>b.onclick=async()=>{
@@ -1349,6 +1362,30 @@ async function boot(){
   // 初回は静かに永続化を依頼
   if(navigator.storage&&navigator.storage.persist){ try{ await navigator.storage.persist(); }catch(_){} }
   if("serviceWorker" in navigator){ try{ await navigator.serviceWorker.register("sw.js"); }catch(_){} }
+  // PWAインストールプロンプト捕捉
+  window.addEventListener("beforeinstallprompt", e=>{ e.preventDefault(); deferredInstallPrompt=e; renderInstallSection(); });
+  window.addEventListener("appinstalled", ()=>{ deferredInstallPrompt=null; renderInstallSection(); });
+  renderInstallSection();
+}
+
+function renderInstallSection(){
+  const btn=document.getElementById("installBtn");
+  const hint=document.getElementById("installHint");
+  const isIOS=/iphone|ipad|ipod/i.test(navigator.userAgent)&&!window.navigator.standalone;
+  const isStandalone=window.matchMedia("(display-mode: standalone)").matches||window.navigator.standalone;
+  if(isStandalone){
+    btn.hidden=true;
+    hint.textContent="インストール済みです。";
+  } else if(deferredInstallPrompt){
+    btn.hidden=false;
+    hint.textContent="";
+  } else if(isIOS){
+    btn.hidden=true;
+    hint.textContent="Safari の共有メニュー →「ホーム画面に追加」でインストールできます。";
+  } else {
+    btn.hidden=true;
+    hint.textContent="お使いのブラウザはインストールに対応していないか、すでにインストール済みです。";
+  }
 }
 boot().catch(err=>{
   document.getElementById("feedSlot").innerHTML=
