@@ -125,7 +125,7 @@
   .node-body{flex:1; min-width:0}
   .node-top{display:flex; align-items:baseline; gap:8px}
   .node-label{font-weight:600; font-size:14.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-  .node-time{font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap}
+  .node-time{font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap; margin-left:auto}
   .node-note{font-size:14px; color:var(--ink); margin-top:2px; white-space:pre-wrap; word-break:break-word}
   /* 拡張カード（複数アイコン or メモあり） */
   .node-card.expanded{flex-direction:column; gap:4px; min-width:0; width:0; flex:1}
@@ -313,6 +313,7 @@
   <div class="sheet" role="dialog" aria-modal="true" aria-label="記録を編集">
     <div class="sheet-head">
       <h3>記録を編集</h3>
+      <button class="btn btn-ghost" id="editClose" aria-label="閉じる">✕</button>
     </div>
     <div class="sheet-body">
       <div class="field">
@@ -323,7 +324,6 @@
       <div class="field"><label>メモ</label><textarea id="editNote" placeholder="（任意）"></textarea></div>
       <div class="actions">
         <button class="btn btn-primary" id="editSave">保存</button>
-        <button class="btn btn-ghost" id="editClose">閉じる</button>
       </div>
       <div class="actions"><button class="btn btn-danger" id="editDelete">この記録を削除</button></div>
     </div>
@@ -363,25 +363,25 @@
   <div class="sheet" role="dialog" aria-modal="true" aria-label="設定">
     <div class="sheet-head">
       <h3>設定</h3>
-      <button class="btn btn-primary" id="setClose">閉じる</button>
+      <button class="btn btn-ghost" id="setClose" aria-label="閉じる">✕</button>
     </div>
     <div class="sheet-body">
-    <div class="field">
-      <label>テーマ</label>
+    <div class="sec" style="margin-top:0; padding-top:0; border-top:none">
+      <h4>テーマ</h4>
       <div class="seg" id="themeSeg">
         <button data-t="auto">自動</button><button data-t="light">ライト</button><button data-t="dark">ダーク</button>
       </div>
     </div>
 
-    <div class="field">
-      <label>週の始まり</label>
+    <div class="sec">
+      <h4>週の始まり</h4>
       <div class="seg" id="weekSeg">
         <button data-w="0">日曜</button><button data-w="1">月曜</button>
       </div>
     </div>
 
-    <div class="field">
-      <label>記録パレット</label>
+    <div class="sec">
+      <h4>記録パレット</h4>
       <div class="pal-edit" id="palEdit"></div>
       <p class="hint">左の枠に絵文字、右にラベル。↑↓で並べ替え。あなた専用の記録項目に作り替えてください。</p>
     </div>
@@ -402,6 +402,12 @@
       </div>
       <button class="btn btn-ghost" id="persistBtn" style="margin-top:4px">端末に永続化を依頼</button>
       <p class="hint" id="persistState"></p>
+    </div>
+
+    <div class="sec">
+      <h4>データのリセット</h4>
+      <p class="hint">記録・パレット・ジャンル・設定をすべて削除します。この操作は取り消せません。事前に書き出しでバックアップを。</p>
+      <button class="btn btn-danger" id="resetBtn" style="margin-top:6px">全データをリセット</button>
     </div>
 
     <div class="sec">
@@ -454,6 +460,7 @@ const Store={
   },
   async allEntries(){ return await reqP(tx(this.db,"entries","readonly").getAll()); },
   async clearEntries(){ await reqP(tx(this.db,"entries","readwrite").clear()); },
+  async clearAll(){ await reqP(tx(this.db,"entries","readwrite").clear()); await reqP(tx(this.db,"meta","readwrite").clear()); },
   async getMeta(k,fb){ const r=await reqP(tx(this.db,"meta","readonly").get(k)); return r? r.v : fb; },
   async setMeta(k,v){ await reqP(tx(this.db,"meta","readwrite").put({k,v})); },
 };
@@ -621,8 +628,18 @@ function makeEntryNode(e){
   const emos=shownIcons.map(ic=>`<span class="node-emo">${ic.emo}</span>`).join("")
     +(extra>0?`<span class="node-emo-more">+${extra}</span>`:"");
   const label=icons.map(ic=>ic.lbl).filter(Boolean).join("・");
+  const singleWithNote=icons.length===1&&!!e.note;
   const expanded=icons.length>1||!!e.note;
-  if(expanded){
+  if(singleWithNote){
+    card.classList.add("expanded");
+    card.innerHTML=`
+      <div class="node-header">
+        <span class="node-emos">${emos}</span>
+        <span class="node-label" style="flex:1">${escapeHtml(label)}</span>
+        <span class="node-time">${fmtTime(e.ts)}</span>
+      </div>
+      <span class="node-note">${escapeHtml(e.note)}</span>`;
+  } else if(expanded){
     card.classList.add("expanded");
     card.innerHTML=`
       <div class="node-header">
@@ -908,6 +925,16 @@ async function refreshPersist(){
   const p=await navigator.storage.persisted();
   el.textContent=p?"✓ 永続化済み：ブラウザに自動削除されにくい状態です。":"未永続化：ストレージ逼迫時に消える可能性があります。下のボタンで依頼できます。";
 }
+async function resetAll(){
+  if(!await showConfirm("記録・パレット・設定をすべて削除します。この操作は取り消せません。","リセット実行","キャンセル")) return;
+  await Store.clearAll();
+  Object.assign(S,{palette:[],genres:[],theme:"auto",reminderDays:7,lastBackup:null,dismissReminder:false,weekStart:0,paletteOpen:{}});
+  S.genres=DEFAULT_GENRES.slice(); await Store.setMeta("genres",S.genres);
+  S.palette=DEFAULT_PALETTE.slice(); await Store.setMeta("palette",S.palette);
+  await Store.setMeta("schema",SCHEMA);
+  applyTheme(); closeScrim("setScrim"); toast("リセットしました");
+  feedLimit=FEED_PAGE; renderPalette(); await refreshViews();
+}
 async function requestPersist(){
   if(!navigator.storage||!navigator.storage.persist){ toast("この端末は永続化に対応していません"); return; }
   const ok=await navigator.storage.persist();
@@ -979,6 +1006,7 @@ function wire(){
   document.getElementById("importBtn").onclick=pickImport;
   document.getElementById("importFile").onchange=e=>{const f=e.target.files[0]; if(f) doImport(f); e.target.value="";};
   document.getElementById("persistBtn").onclick=requestPersist;
+  document.getElementById("resetBtn").onclick=resetAll;
 
   document.getElementById("reminderDays").onchange=async e=>{S.reminderDays=Number(e.target.value); await Store.setMeta("reminderDays",S.reminderDays); renderReminder();};
   document.querySelectorAll("#themeSeg button").forEach(b=>b.onclick=async()=>{
