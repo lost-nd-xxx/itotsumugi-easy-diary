@@ -16,7 +16,7 @@
 
 ## ファイル構成
 ```
-itotsumugi/
+docs/
 ├ index.html              アプリ本体（HTML/CSS/JS 全部入り）
 ├ manifest.webmanifest    PWA 設定
 ├ sw.js                   オフライン用 Service Worker
@@ -29,15 +29,16 @@ itotsumugi/
 
 PWA としてインストール・永続化するには **HTTPS（または localhost）での配信が必須**です。`file://` で直接開くと Service Worker と永続化が動きません。
 
-**A. 自分のサイト（FTP）**
-`itotsumugi/` フォルダごと HTTPS のサイトにアップロードし、`https://あなたのサイト/itotsumugi/` を Android Chrome で開く。
+**A. GitHub Pages（推奨）**
+リポジトリの Settings → Pages → Source を「Deploy from a branch」、Branch を `main` / `docs` に設定。
+有効化後 `https://ユーザー名.github.io/リポジトリ名/` を Android Chrome で開く。
 
-**B. GitHub Pages**
-リポジトリに置いて Pages を有効化 → `https://ユーザー名.github.io/リポジトリ名/` を開く。
+**B. 自分のサイト（FTP）**
+`docs/` フォルダの中身を HTTPS のサイトにアップロードし、そのURLを Android Chrome で開く。
 
 **C. ローカルで試す（PCで動作確認）**
 ```
-cd itotsumugi
+cd docs
 python -m http.server 8000
 ```
 → ブラウザで `http://localhost:8000/`

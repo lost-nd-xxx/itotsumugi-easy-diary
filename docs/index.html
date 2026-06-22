@@ -657,7 +657,7 @@ function makeEntryNode(e){
   const MAX_EMO=4;
   const shownIcons=icons.slice(0,MAX_EMO);
   const extra=icons.length-MAX_EMO;
-  const emos=shownIcons.map(ic=>`<span class="node-emo">${ic.emo}</span>`).join("")
+  const emos=shownIcons.map(ic=>`<span class="node-emo">${escapeHtml(ic.emo)}</span>`).join("")
     +(extra>0?`<span class="node-emo-more">+${extra}</span>`:"");
   const label=icons.map(ic=>ic.lbl).filter(Boolean).join("・");
   const singleWithNote=icons.length===1&&!!e.note;
