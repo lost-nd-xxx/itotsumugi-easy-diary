@@ -116,7 +116,7 @@
   .node{display:flex; gap:10px; align-items:center; padding:5px 0; position:relative; min-width:0}
   .node-dot{width:12px; height:12px; border-radius:50%; background:var(--surface); border:2.5px solid var(--accent);
     flex-shrink:0; margin-left:-22px; z-index:1; position:relative}
-  .node-card{display:flex; gap:11px; align-items:flex-start; background:var(--surface); border:1px solid var(--line);
+  .node-card{display:flex; gap:11px; align-items:center; background:var(--surface); border:1px solid var(--line);
     border-radius:var(--radius-sm); padding:10px 12px; box-shadow:var(--shadow); width:100%; min-width:0; text-align:left}
   .node-card:hover{border-color:var(--accent)}
   .node-emos{display:flex; flex-wrap:wrap; gap:3px; align-items:flex-start}
@@ -180,13 +180,13 @@
   .seg button{flex:1; border:none; background:none; padding:9px; border-radius:8px; font-size:13.5px; color:var(--muted)}
   .seg button.on{background:var(--surface); color:var(--ink); font-weight:600; box-shadow:var(--shadow)}
   .pal-edit{display:flex; flex-direction:column; gap:8px; margin:4px 0 10px}
-  .pal-item{display:flex; gap:8px; align-items:center; background:var(--surface); border:1px solid var(--line); border-radius:11px; padding:7px 9px}
-  .pal-item input.emo{width:48px; text-align:center; font-size:20px; padding:8px 0}
-  .pal-item input.lbl{flex:1}
-  .pal-item input{background:var(--paper); border:1px solid var(--line); border-radius:9px; padding:8px; color:var(--ink); font-size:14px; font-family:inherit}
-  .pal-item .mv{background:none; border:none; color:var(--muted); font-size:16px; width:28px; height:30px; border-radius:7px}
+  .pal-item{display:flex; gap:4px; align-items:center; background:var(--surface); border:1px solid var(--line); border-radius:11px; padding:6px 8px}
+  .pal-item input.emo{width:40px; min-width:0; text-align:center; font-size:18px; padding:6px 0}
+  .pal-item input.lbl{flex:1; min-width:0}
+  .pal-item input{background:var(--paper); border:1px solid var(--line); border-radius:9px; padding:7px 6px; color:var(--ink); font-size:14px; font-family:inherit}
+  .pal-item .mv{background:none; border:none; color:var(--muted); font-size:14px; width:24px; height:28px; border-radius:7px; padding:0; flex-shrink:0}
   .pal-item .mv:hover{background:var(--surface-2); color:var(--ink)}
-  .pal-item .del{background:none; border:none; color:var(--danger); font-size:17px; width:30px; height:30px; border-radius:7px}
+  .pal-item .del{background:none; border:none; color:var(--danger); font-size:15px; width:26px; height:28px; border-radius:7px; padding:0; flex-shrink:0}
   .add-pal{background:var(--accent-soft); color:var(--accent-ink); border:none; border-radius:10px; padding:10px; font-size:13.5px; font-weight:600; width:100%}
   .add-pal-genre{background:none; border:1px dashed var(--line); border-radius:9px; color:var(--muted); font-size:13px; padding:7px; width:100%; cursor:pointer; margin-top:2px}
   .add-pal-genre:hover{background:var(--surface-2); color:var(--ink)}
@@ -722,11 +722,21 @@ async function renderFeed(){
 async function renderThread(){
   const slot=document.getElementById("threadSlot");
   const start=dayStart(S.viewDate), end=dayEnd(S.viewDate);
-  let list=await Store.entriesInRange(start,end);
-  list.sort((a,b)=>a.ts-b.ts);
-  document.getElementById("threadCount").textContent=list.length?`${list.length}件の記録`:"";
-  if(!list.length){
+  let all=await Store.entriesInRange(start,end);
+  all.sort((a,b)=>a.ts-b.ts);
+  const list=filterActive()?all.filter(entryMatches):all;
+  const countEl=document.getElementById("threadCount");
+  if(filterActive()&&all.length){
+    countEl.textContent=`${all.length}件中${list.length}件を表示中`;
+  } else {
+    countEl.textContent=all.length?`${all.length}件の記録`:"";
+  }
+  if(!all.length){
     slot.innerHTML=`<div class="empty"><span class="e">𓂃</span>この日の記録はまだありません。<br>上のアイコンを選んで「記録」を押すと、この日に残ります。</div>`;
+    return;
+  }
+  if(!list.length){
+    slot.innerHTML=`<div class="empty"><span class="e">𓂃</span>絞り込み条件に一致する記録がありません。</div>`;
     return;
   }
   const thread=document.createElement("div"); thread.className="thread";
@@ -821,7 +831,9 @@ async function deleteEdit(){
 
 // ---------- 設定: パレット編集 ----------
 function renderPalEdit(){
-  const box=document.getElementById("palEdit"); box.innerHTML="";
+  const box=document.getElementById("palEdit");
+  const openGenres=new Set(Array.from(box.querySelectorAll("details[open]")).map(d=>d.dataset.genre));
+  box.innerHTML="";
 
   function makePalRow(it,i){
     const row=document.createElement("div"); row.className="pal-item";
@@ -833,15 +845,16 @@ function renderPalEdit(){
     const [emo,lbl]=row.querySelectorAll("input");
     emo.addEventListener("input",()=>{S.palette[i].emo=emo.value;});
     lbl.addEventListener("input",()=>{S.palette[i].lbl=lbl.value;});
-    row.querySelector(".up").addEventListener("click",()=>movePal(i,-1));
-    row.querySelector(".dn").addEventListener("click",()=>movePal(i,1));
-    row.querySelector(".del").addEventListener("click",()=>{S.palette.splice(i,1); savePalette();});
+    row.querySelector(".up").addEventListener("click",e=>{e.stopPropagation(); movePal(i,-1);});
+    row.querySelector(".dn").addEventListener("click",e=>{e.stopPropagation(); movePal(i,1);});
+    row.querySelector(".del").addEventListener("click",e=>{e.stopPropagation(); S.palette.splice(i,1); savePalette();});
     return row;
   }
 
   S.genres.forEach(g=>{
     const items=S.palette.filter(it=>it.genre===g.key);
-    const det=document.createElement("details"); det.className="genre-details";
+    const det=document.createElement("details"); det.className="genre-details"; det.dataset.genre=g.key;
+    if(openGenres.has(g.key)) det.open=true;
     const sum=document.createElement("summary"); sum.textContent=g.label;
     det.appendChild(sum);
     const inner=document.createElement("div"); inner.style.cssText="padding:6px 8px 8px; display:flex; flex-direction:column; gap:6px;";
@@ -851,8 +864,8 @@ function renderPalEdit(){
     });
     const addBtn=document.createElement("button"); addBtn.className="add-pal-genre";
     addBtn.textContent="＋ 追加";
-    addBtn.addEventListener("click",()=>{
-      S.palette.push({id:uid(),emo:"⭐",lbl:"新しい項目",genre:g.key}); savePalette();
+    addBtn.addEventListener("click",e=>{
+      e.stopPropagation(); S.palette.push({id:uid(),emo:"⭐",lbl:"新しい項目",genre:g.key}); savePalette();
     });
     inner.appendChild(addBtn);
     det.appendChild(inner);
@@ -1113,7 +1126,7 @@ function clearFilter(){
 function updateFilterBadge(){
   const tabBadge=document.getElementById("filterBadge");
   if(tabBadge) tabBadge.classList.toggle("has-badge", filterActive());
-  ["feedView","calView"].forEach(id=>{
+  ["feedView"].forEach(id=>{
     const head=document.querySelector(`#${id} .thread-head, #${id} .cal-header`);
     if(!head) return;
     const old=head.querySelector(".filter-badge");
@@ -1190,17 +1203,12 @@ async function renderCal(){
   const monthEnd=new Date(y,m+1,1).getTime();
   const entries=await Store.entriesInRange(monthStart,monthEnd);
 
-  // 日ごとに記録を集約。絞り込み時は該当記録のみ残す（非該当日は dayMap に入らない）
-  const dayMap=new Map();    // dayKey(ms) -> entry[]（表示用・絞り込み済み）
-  const dayMapAll=new Map(); // dayKey(ms) -> entry[]（全件。非該当日の淡色判定用）
+  // 日ごとに記録を集約（カレンダーセルは絞り込みに関係なく全件表示）
+  const dayMap=new Map();
   entries.forEach(e=>{
     const k=dayStart(e.ts);
-    if(!dayMapAll.has(k)) dayMapAll.set(k,[]);
-    dayMapAll.get(k).push(e);
-    if(entryMatches(e)){
-      if(!dayMap.has(k)) dayMap.set(k,[]);
-      dayMap.get(k).push(e);
-    }
+    if(!dayMap.has(k)) dayMap.set(k,[]);
+    dayMap.get(k).push(e);
   });
 
   // グリッドを構築
@@ -1235,11 +1243,6 @@ async function renderCal(){
     const date=new Date(y,m,d);
     const cell=makeCalCell(date,false,dayMap);
     if(isSameDay(date,today)) cell.classList.add("today");
-    // 絞り込み中：記録はあるが該当なしの日を淡色化
-    if(filterActive()){
-      const k=dayStart(date.getTime());
-      if(dayMapAll.has(k)&&!dayMap.has(k)) cell.classList.add("filtered-out");
-    }
     grid.appendChild(cell);
   }
   // 翌月の埋め（6行に揃える）
