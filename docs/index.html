@@ -872,8 +872,8 @@ function renderPalEdit(){
       <button class="mv dn" aria-label="下へ">↓</button>
       <button class="del" aria-label="削除">✕</button>`;
     const [emo,lbl]=row.querySelectorAll("input");
-    emo.addEventListener("input",()=>{S.palette[i].emo=emo.value;});
-    lbl.addEventListener("input",()=>{S.palette[i].lbl=lbl.value;});
+    emo.addEventListener("input",()=>{S.palette[i].emo=emo.value; debounceSavePalette();});
+    lbl.addEventListener("input",()=>{S.palette[i].lbl=lbl.value; debounceSavePalette();});
     row.querySelector(".up").addEventListener("click",e=>{e.stopPropagation(); movePalInGenre(it.id,-1);});
     row.querySelector(".dn").addEventListener("click",e=>{e.stopPropagation(); movePalInGenre(it.id,1);});
     row.querySelector(".del").addEventListener("click",e=>{e.stopPropagation(); S.palette.splice(i,1); savePalette();});
@@ -926,6 +926,8 @@ function movePalInGenre(id,dir){
   [S.palette[ai],S.palette[bi]]=[S.palette[bi],S.palette[ai]];
   savePalette();
 }
+let _savePalTimer=null;
+function debounceSavePalette(){clearTimeout(_savePalTimer); _savePalTimer=setTimeout(()=>savePalette(),1500);}
 async function savePalette(){
   S.palette=S.palette.filter(p=>(p.emo&&p.emo.trim()));
   await Store.setMeta("palette",S.palette);
@@ -1021,7 +1023,11 @@ async function requestPersist(){
 // ---------- モーダル制御 ----------
 function openScrim(id){document.getElementById(id).classList.add("open");}
 function closeScrim(id){document.getElementById(id).classList.remove("open");}
-document.querySelectorAll(".scrim").forEach(s=>s.addEventListener("click",e=>{if(e.target===s) s.classList.remove("open");}));
+document.querySelectorAll(".scrim").forEach(s=>{
+  let _downOnScrim=false;
+  s.addEventListener("mousedown",e=>{_downOnScrim=(e.target===s);});
+  s.addEventListener("click",e=>{if(e.target===s&&_downOnScrim) s.classList.remove("open");});
+});
 
 // アプリ内確認ダイアログ（confirm()の代替）
 // okLabel/cancelLabel を省略すると「削除」「キャンセル」
